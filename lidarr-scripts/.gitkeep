@@ -1,0 +1,3 @@
+# Thin Lidarr custom-script wrappers (on_album_download.py,
+# on_artist_add.py). These are mounted into the Lidarr container,
+# not into this one.

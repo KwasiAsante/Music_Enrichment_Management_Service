@@ -1,0 +1,3 @@
+# Runtime state (vgmdb_mapping.json, enriched_albums.json,
+# album_list.json, mb_artist_cache.json, app.db). Gitignored.
+# Persisted via the `lidarr-helper-data` Docker volume.

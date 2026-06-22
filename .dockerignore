@@ -1,0 +1,39 @@
+# Keep the build context small and avoid leaking secrets/state into the image.
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+.env
+.env.local
+*.env.local
+
+# ── Runtime state (mounted at runtime, never baked in) ───────────────────────
+data/
+
+# ── VCS ──────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Docs that don't belong in the image ──────────────────────────────────────
+README.md
+docs/

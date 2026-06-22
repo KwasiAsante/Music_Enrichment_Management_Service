@@ -1,0 +1,62 @@
+# ── Core settings ─────────────────────────────────────────────────────────────
+# NOTE: paths below are CONTAINER paths (matching the docker-compose mounts).
+# The bind mount `${HOST_MUSIC_DIR}:/music` and the named volume
+# `lidarr-helper-data:/data` are what these resolve against at runtime.
+
+# Point at your music library (matches volumes: in docker-compose.yml)
+directory: /music/synced_music/Artist
+
+# beets database location — kept on the persistent volume so it survives
+# container rebuilds.
+library: /data/musiclibrary.db
+
+# Don't let beets move or copy files — Lidarr and Picard handle structure
+copy: no
+move: no
+hardlink: no
+write: yes
+per_disc_numbering: yes
+
+# ── Plugins ───────────────────────────────────────────────────────────────────
+
+plugins:
+  - VGMplug
+  - fromfilename
+  - mbsync
+  - info
+  - missing
+
+# ── VGMDB plugin settings ─────────────────────────────────────────────────────
+# baseurl is read from the VGMDB_URL env var at runtime by app code; the
+# value here is the fallback for direct CLI use of `beet` inside the container.
+
+VGMplug:
+  lang-priority: en,ja-latn,ja
+  data_source_mismatch_penalty: 0.0
+  autosearch: no
+  baseurl: http://192.168.2.172:8008
+  artist-priority: composers,performers,arrangers
+
+# ── Import settings ───────────────────────────────────────────────────────────
+
+import:
+  move: no
+  copy: no
+  write: yes
+  timid: no
+  strong_rec_thresh: 0.40
+  rec_thresh: 0.40
+  log: /data/import.log
+
+# ── Match settings ───────────────────────────────────────────────────────────
+
+match:
+  strong_rec_thresh: 0.90   # accept anything up to 90% distance (very permissive)
+  max_rec:
+    album: strong      # don't downgrade recommendation due to album name mismatch
+    track_title: strong
+
+# ── UI settings ───────────────────────────────────────────────────────────────
+
+ui:
+  color: yes

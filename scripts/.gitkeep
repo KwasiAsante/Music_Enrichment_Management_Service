@@ -1,0 +1,3 @@
+# Standalone CLI versions of the original scripts get placed here
+# during the porting phase so they remain runnable inside the
+# container via `docker exec`.

@@ -1,0 +1,350 @@
+"""VGMDBMapper — ported from ``generate-mappings-template.py`` + ``map-vgmdb.py``.
+
+Two responsibilities:
+
+* **Search** — given an album, find candidate VGMDB ids using the same
+  four-step pipeline the original interactive script used:
+
+      0. Auto-mapping: if the MusicBrainz release already has a VGMDB
+         URL relationship, that's the id — no search needed.
+      1. Catalog hint from audio file tags (fast — no network call).
+      2. If no tag catalog, fetch catalog + barcode from MB.
+      3. Search VGMDB by catalog → barcode → title (each step only if
+         the previous returned nothing).
+
+* **CRUD** over ``vgmdb_mapping.json`` — list, list-unmapped, set, delete.
+  These are thin wrappers over the JSON storage layer; they exist so the
+  API router can stay declarative and the policy (SKIP_ARTISTS, what
+  counts as "unmapped", entry shape) lives in one place.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+from mutagen import File as MutagenFile  # type: ignore[import-untyped]
+
+from app.config import settings
+from app.core.mb_client import MBClient
+from app.core.vgmdb_client import VGMDBClient, VGMDBHint
+from app.storage.json_store import store
+
+log = logging.getLogger("lidarr-helper.vgmdb_mapper")
+
+# Artists explicitly excluded from "unmapped" listings — they're Western
+# acts that intentionally have no VGMDB presence. Customise to taste; the
+# list is read once at module import.
+SKIP_ARTISTS: frozenset[str] = frozenset({
+    "Linkin Park", "Thousand Foot Krutch", "Barenaked Ladies",
+    "Jeff Williams", "Jeff Williams feat. Casey Lee Williams",
+    "Jeff Williams feat. Casey Lee Williams with Alex Abraham",
+})
+
+AUDIO_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
+
+
+# ── helpers ────────────────────────────────────────────────────────────────
+def normalize_catalog(s: str | None) -> str:
+    """Strip dashes/spaces/tildes and upper-case for comparison."""
+    if not s:
+        return ""
+    return s.upper().replace("-", "").replace(" ", "").replace("~", "")
+
+
+def is_suggested(
+    hint_title: str,
+    album_name: str,
+    *,
+    hint_catalog: str | None = None,
+    mb_catalog: str | None = None,
+) -> bool:
+    """True if a hint is a strong match for an album.
+
+    Priority: normalised catalog match (including prefix overlap in
+    either direction) > title substring match. Mirrors the original.
+    """
+    if hint_catalog and mb_catalog:
+        hc = normalize_catalog(hint_catalog)
+        mc = normalize_catalog(mb_catalog)
+        if hc and mc and (hc == mc or hc.startswith(mc) or mc.startswith(hc)):
+            return True
+    if not hint_title or not album_name:
+        return False
+    return (hint_title.lower() in album_name.lower()
+            or album_name.lower() in hint_title.lower())
+
+
+def _read_catalog_from_tags(folder: Path) -> str | None:
+    """Read the first catalog (or barcode as fallback) found in any audio
+    file under ``folder``. Returns None on failure or if nothing matched.
+    Only the first audio file is inspected — same as the original script.
+    """
+    if not folder.exists():
+        return None
+    for f in sorted(folder.rglob("*")):
+        if f.suffix.lower() not in AUDIO_EXTS:
+            continue
+        try:
+            audio = MutagenFile(str(f), easy=False)
+        except Exception:  # noqa: BLE001
+            return None
+        if not audio or not audio.tags:
+            return None
+        tags = audio.tags
+        # Try CATALOG / CATALOGNUMBER tags first
+        for key in list(tags.keys()):
+            ku = key.upper()
+            if "CATALOGNUMBER" in ku or "CATALOG" in ku:
+                val = tags[key]
+                cat = _extract_tag_text(val)
+                if cat:
+                    return cat
+        # Fall back to BARCODE
+        for key in list(tags.keys()):
+            if "BARCODE" in key.upper():
+                val = tags[key]
+                bc = _extract_tag_text(val)
+                if bc:
+                    return bc
+        return None
+    return None
+
+
+def _extract_tag_text(val: Any) -> str | None:
+    """Pull a text string out of a mutagen tag value across formats."""
+    if hasattr(val, "text") and val.text:
+        return str(val.text[0]).strip()
+    if hasattr(val, "__iter__") and not isinstance(val, (str, bytes)):
+        items = list(val)
+        if items:
+            item = items[0]
+            if hasattr(item, "value"):
+                return str(item.value).strip()
+            return str(item).strip()
+    if isinstance(val, (str, bytes)):
+        return val.decode("utf-8", "replace").strip() if isinstance(val, bytes) else val.strip()
+    return None
+
+
+# ── service ────────────────────────────────────────────────────────────────
+class VGMDBMapper:
+    """Search VGMDB for albums and manage ``vgmdb_mapping.json`` entries."""
+
+    def __init__(
+        self,
+        mb: MBClient | None = None,
+        vgmdb: VGMDBClient | None = None,
+    ) -> None:
+        self.mb = mb or MBClient()
+        self.vgmdb = vgmdb or VGMDBClient()
+        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+
+    # ── search pipeline ────────────────────────────────────────────────
+    def search(
+        self,
+        *,
+        mb_release_id: str | None,
+        album: str,
+        artist: str = "",
+        folder: str | None = None,
+    ) -> dict[str, Any]:
+        """Run the full search pipeline for one album.
+
+        Returns::
+
+            {
+              "mb_vgmdb_id": str | None,    # set if MB URL relationship found
+              "mb_catalog":  str | None,
+              "mb_barcode":  str | None,
+              "catalog_hints": [VGMDBHint, ...],
+              "barcode_hints": [VGMDBHint, ...],
+              "title_hints":   [VGMDBHint, ...],
+              "suggested": VGMDBHint | None,   # best match across all hints
+            }
+
+        Any individual step that returns no hints simply yields an empty
+        list; callers (the API, the future Web UI) decide what to render.
+        """
+        result: dict[str, Any] = {
+            "mb_vgmdb_id":   None,
+            "mb_catalog":    None,
+            "mb_barcode":    None,
+            "catalog_hints": [],
+            "barcode_hints": [],
+            "title_hints":   [],
+            "suggested":     None,
+        }
+
+        # ── 0: MB URL relationship → auto-map ──────────────────────────
+        if mb_release_id and not mb_release_id.startswith("vgmdb-"):
+            mb_vgmdb_id = self.mb.release_vgmdb_link(mb_release_id)
+            if mb_vgmdb_id:
+                log.info("auto-map via MB URL relationship: %s → vgmdb:%s",
+                         mb_release_id, mb_vgmdb_id)
+                result["mb_vgmdb_id"] = mb_vgmdb_id
+                return result
+
+        # ── 1: catalog from audio tags ─────────────────────────────────
+        mb_catalog: str | None = None
+        if folder:
+            folder_path = self.artist_root / folder
+            mb_catalog = _read_catalog_from_tags(folder_path)
+
+        # ── 2: catalog + barcode from MB if tags didn't have one ───────
+        mb_barcode: str | None = None
+        if not mb_catalog and mb_release_id and not mb_release_id.startswith("vgmdb-"):
+            mb_catalog, mb_barcode = self.mb.release_catalog_barcode(mb_release_id)
+
+        result["mb_catalog"] = mb_catalog
+        result["mb_barcode"] = mb_barcode
+
+        # ── 3a: VGMDB by catalog ───────────────────────────────────────
+        if mb_catalog:
+            result["catalog_hints"] = self.vgmdb.search_by_catalog(mb_catalog)
+
+        # ── 3b: VGMDB by barcode (only if catalog turned up nothing) ──
+        if not result["catalog_hints"] and mb_barcode:
+            result["barcode_hints"] = self.vgmdb.search_by_barcode(mb_barcode)
+
+        # ── 3c: VGMDB by title (only if the structured searches failed) ─
+        if not result["catalog_hints"] and not result["barcode_hints"]:
+            hints = self.vgmdb.search(album)
+            # If a free-text search of the full title returns nothing, try
+            # the first four words — the original script's fallback for
+            # albums with long parenthesised suffixes.
+            if not hints:
+                hints = self.vgmdb.search(" ".join(album.split()[:4]))
+            result["title_hints"] = hints
+
+        # ── pick a "suggested" hint across all three hint lists ────────
+        all_hints: list[VGMDBHint] = (
+            result["catalog_hints"]
+            + result["barcode_hints"]
+            + result["title_hints"]
+        )
+        for h in all_hints:
+            if is_suggested(h.get("title", ""), album,
+                            hint_catalog=h.get("catalog"),
+                            mb_catalog=mb_catalog):
+                result["suggested"] = h
+                break
+
+        return result
+
+    # ── CRUD over vgmdb_mapping.json ───────────────────────────────────
+    def list_mappings(self, artist_filter: str | None = None) -> list[dict]:
+        """Return all entries from ``vgmdb_mapping.json`` as a list, each
+        annotated with its ``mb_release_id`` key. Optionally filtered by
+        artist (case-insensitive substring match)."""
+        mapping = store.vgmdb_mapping.read()
+        af = artist_filter.lower() if artist_filter else None
+        out: list[dict] = []
+        for mb_id, entry in mapping.items():
+            if af and af not in (entry.get("artist") or "").lower():
+                continue
+            row = dict(entry)
+            row["mb_release_id"] = mb_id
+            out.append(row)
+        out.sort(key=lambda r: ((r.get("artist") or "").lower(),
+                                (r.get("album") or "").lower()))
+        return out
+
+    def list_unmapped(
+        self,
+        artist_filter: str | None = None,
+        *,
+        skip_western: bool = True,
+    ) -> list[dict]:
+        """Return album_list entries that have no VGMDB association.
+
+        Mirrors the original ``cmd_unmapped`` / ``get_unmapped`` logic:
+        an album counts as mapped if its ``mb_release_id`` is in
+        ``vgmdb_mapping.json`` OR is itself a ``vgmdb-`` id. Western
+        artists from :data:`SKIP_ARTISTS` are excluded by default.
+        """
+        albums = store.album_list.read()
+        mapping = store.vgmdb_mapping.read()
+        af = artist_filter.lower() if artist_filter else None
+
+        out: list[dict] = []
+        for folder_name, info in albums.items():
+            artist = info.get("artist") or ""
+            if skip_western and artist in SKIP_ARTISTS:
+                continue
+            if af and af not in artist.lower():
+                continue
+            mb_id = info.get("mb_release_id") or ""
+            if mb_id in mapping:
+                continue
+            if mb_id.startswith("vgmdb-"):
+                continue
+            out.append({
+                "folder_name":   folder_name,
+                "artist":        artist,
+                "album":         info.get("album") or "",
+                "mb_release_id": mb_id or None,
+                "folder":        info.get("folder") or "",
+            })
+        out.sort(key=lambda e: (e["artist"].lower(), e["album"].lower()))
+        return out
+
+    def set_mapping(
+        self,
+        mb_release_id: str,
+        vgmdb_id: str,
+        *,
+        artist: str = "",
+        album: str = "",
+        folder: str = "",
+        source: str = "manual",
+    ) -> dict:
+        """Insert or update one mapping entry.
+
+        ``vgmdb_id`` may be the string ``"skip"`` — the original scripts
+        use that as a sentinel meaning "this album is not on VGMDB; don't
+        ask about it again". Empty ``artist``/``album``/``folder`` get
+        backfilled from ``album_list.json`` if a row exists for the
+        ``mb_release_id``.
+        """
+        if not mb_release_id:
+            raise ValueError("mb_release_id is required")
+        if not vgmdb_id:
+            raise ValueError("vgmdb_id is required (use 'skip' to mark as not-on-VGMDB)")
+
+        # Backfill missing fields from the album list if we can find them.
+        if not (artist and album and folder):
+            for fname, info in store.album_list.read().items():
+                if info.get("mb_release_id") == mb_release_id:
+                    artist = artist or (info.get("artist") or "")
+                    album = album or (info.get("album") or "")
+                    folder = folder or (info.get("folder") or fname)
+                    break
+
+        mapping = store.vgmdb_mapping.read()
+        entry = {
+            "vgmdb_id": str(vgmdb_id),
+            "folder":   folder,
+            "artist":   artist,
+            "album":    album,
+            "source":   source,
+        }
+        mapping[mb_release_id] = entry
+        store.vgmdb_mapping.write(mapping)
+        log.info("mapping set: %s → vgmdb:%s (source=%s)",
+                 mb_release_id, vgmdb_id, source)
+
+        out = dict(entry)
+        out["mb_release_id"] = mb_release_id
+        return out
+
+    def delete_mapping(self, mb_release_id: str) -> bool:
+        """Remove a mapping. Returns True if it existed, False otherwise."""
+        mapping = store.vgmdb_mapping.read()
+        if mb_release_id not in mapping:
+            return False
+        del mapping[mb_release_id]
+        store.vgmdb_mapping.write(mapping)
+        log.info("mapping deleted: %s", mb_release_id)
+        return True
