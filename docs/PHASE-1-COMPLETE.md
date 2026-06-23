@@ -74,9 +74,12 @@ All three are stdlib-only and always exit 0.
 
 2. **Drop your custom beets plugin into place.** Rename your
    `VGMplug_custom.py` to `VGMplug.py` and put it in
-   `app/beets_plugins/` (the `.gitkeep` there has a reminder). The
-   Dockerfile copies that dir into the image's beets plugin folder at
-   build time.
+   `app/beets_plugins/`. The Dockerfile dynamically locates the
+   `beetsplug` namespace package inside site-packages and copies every
+   `.py` file from that directory in, overriding any module of the
+   same name. **The build fails fast if no `.py` files are present.**
+   The `beets-vgmdb` pip package is intentionally NOT installed, to
+   avoid shadowing your custom file.
 
 3. **(Optional) Drop `music-search.html` into `app/ui/static/`** if you
    want `/music-search` to serve it. Missing file → 404 with a clear

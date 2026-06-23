@@ -35,9 +35,12 @@ What it does:
 1. Copy `.env.example` to `.env` and fill in every `PLACEHOLDER_ME`
    (Lidarr/Prowlarr API keys, qBittorrent password, Discord webhooks,
    GitHub token + Gist id).
-2. Drop your beets VGMDB plugin customisations into
-   `app/beets_plugins/VGMplug.py` if you maintain your own (a default
-   copy is already checked in).
+2. **Drop your custom VGMDB plugin** at `app/beets_plugins/VGMplug.py`
+   (rename your `VGMplug_custom.py`). The Dockerfile installs every
+   `.py` in that directory into the container's `beetsplug/` namespace
+   so beets discovers it via `plugins: - VGMplug` in `config.yaml`. The
+   build **fails fast** if the directory has no `.py` files — the
+   helper is useless without the plugin.
 3. `docker compose up -d --build`
 4. Check `GET /health` (reports any env vars still left as
    `PLACEHOLDER_ME`) and `GET /docs` for the interactive API reference.

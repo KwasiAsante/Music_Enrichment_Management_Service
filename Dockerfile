@@ -29,12 +29,30 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# ── Beets configuration and custom plugin ────────────────────────────────────
-# The custom VGMplug plugin lives at app/beets_plugins/VGMplug.py in the repo.
-# Drop your VGMplug_custom.py there (renamed to VGMplug.py) before building.
+# ── Beets configuration ──────────────────────────────────────────────────────
 RUN mkdir -p ${BEETSDIR}
 COPY config.yaml ${BEETSDIR}/config.yaml
-COPY app/beets_plugins/ ${BEETSDIR}/beetsplug/
+
+# ── Custom beets plugins ─────────────────────────────────────────────────────
+# Beets discovers plugins by importing `beetsplug.<NAME>` (a Python namespace
+# package), so the .py files have to land in the on-disk `beetsplug/`
+# directory that's on PYTHONPATH — i.e. inside site-packages. We discover
+# that path dynamically so it isn't tied to a Python version.
+#
+# Drop your VGMplug_custom.py into app/beets_plugins/ (renamed to VGMplug.py)
+# before building. If the directory has nothing but .gitkeep the build fails
+# loudly — the helper is useless without the plugin.
+COPY app/beets_plugins/ /tmp/beets_plugins/
+RUN BEETSPLUG_DIR="$(python3 -c 'import beetsplug, os; \
+        print(next(p for p in beetsplug.__path__ if "site-packages" in p))')" \
+    && PY_FILES=$(find /tmp/beets_plugins -maxdepth 1 -name '*.py' -type f) \
+    && if [ -z "$PY_FILES" ]; then \
+        echo "ERROR: no .py files in app/beets_plugins/ — drop your custom" >&2; \
+        echo "       VGMplug.py there before docker compose up --build" >&2; \
+        exit 1; \
+    fi \
+    && cp -v $PY_FILES "$BEETSPLUG_DIR/" \
+    && rm -rf /tmp/beets_plugins
 
 # ── Application code ─────────────────────────────────────────────────────────
 COPY app/ ./app/

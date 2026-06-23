@@ -1,3 +1,12 @@
-# Drop VGMplug_custom.py here as VGMplug.py.
-# The Dockerfile copies the contents of this directory into the beets
-# plugins directory inside the image at build time.
+# Drop your custom VGMplug_custom.py here, renamed to VGMplug.py.
+#
+# At build time the Dockerfile dynamically locates the `beetsplug` namespace
+# package inside site-packages (so the path isn't tied to a Python version)
+# and copies every .py file from this directory into it. Any module name
+# that collides with one installed by pip (e.g. a `beetsplug.VGMplug` from
+# the beets-vgmdb pip package — currently not installed) gets overridden by
+# the file you drop here.
+#
+# The build will FAIL if this directory contains no .py files — the helper
+# has nothing to do without the custom plugin, so a silent skip would be
+# worse than a loud error.

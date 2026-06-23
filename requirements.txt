@@ -6,7 +6,10 @@ python-multipart>=0.0.9
 requests>=2.31.0
 mutagen>=1.47.0
 beets>=2.11.0
-beets-vgmdb>=1.3.5
+# beets-vgmdb intentionally NOT pinned: we use the user's custom VGMplug.py
+# from app/beets_plugins/, installed into site-packages/beetsplug/ by the
+# Dockerfile. Adding the pip package back here would shadow the custom file
+# on disk depending on import order.
 aiofiles>=23.0.0
 pydantic-settings>=2.0.0
 aiosqlite>=0.20.0
