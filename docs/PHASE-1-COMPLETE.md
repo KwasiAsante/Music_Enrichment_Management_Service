@@ -159,6 +159,13 @@ mocked. Worth shaking out with a real container build.
   symbol. Don't replace it with a direct `subprocess.run` import
   elsewhere or tests will silently miss it.
 
+- **MB seed-URL routing.** `enrich_album(seed_category="mb_seed_dl")` is
+  the default — Lidarr's OnAlbumDownload hook posts seed URLs to
+  `DISCORD_WEBHOOK_MB_SEED_DL`. `run_bulk()` overrides to
+  `"mb_seed_beets"` so bulk-run seeds land on
+  `DISCORD_WEBHOOK_MB_SEED_BEETS`. If you add a new caller, pick the
+  appropriate channel explicitly rather than relying on the default.
+
 - **The plan's design-decision #4 was reversed.** Music mount is now
   read-write (not read-only). The reasoning is in the plan doc itself.
 

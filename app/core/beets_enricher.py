@@ -50,7 +50,7 @@ from app.config import settings
 from app.core.library_scanner import LibraryScanner
 from app.core.mb_client import MBClient
 from app.core.mb_link import MBLinkChecker
-from app.core.notifier import Notifier
+from app.core.notifier import Category, Notifier
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.storage import db
 from app.storage.json_store import store
@@ -176,6 +176,7 @@ class BeetsEnricher:
         *,
         allow_search: bool = False,
         dry_run: bool = False,
+        seed_category: Category = "mb_seed_dl",
     ) -> dict[str, Any]:
         """Enrich one album. ``info`` shape::
 
@@ -307,7 +308,9 @@ class BeetsEnricher:
             f"**{artist}** — {album}\nvgmdb:{vgmdb_id}\nMatch: {match_pct}",
             success=True,
         )
-        seed_category = self._post_mb_seed(mb_release_id, vgmdb_id, artist, album)
+        posted_to = self._post_mb_seed(
+            mb_release_id, vgmdb_id, artist, album, category=seed_category,
+        )
 
         db.add_activity(
             "enrich",
@@ -319,7 +322,7 @@ class BeetsEnricher:
         return {
             "ok": True, "vgmdb_id": vgmdb_id, "source": source,
             "match": match_pct, "tags_fixed": tags_fixed,
-            "seed_category": seed_category,
+            "seed_category": posted_to,
             "message": "enrichment complete",
             "artist": artist, "album": album, "mb_release_id": mb_release_id,
         }
@@ -418,7 +421,12 @@ class BeetsEnricher:
                 if on_progress: on_progress(i, total, info)
                 continue
 
-            result = self.enrich_album(info, allow_search=False, dry_run=dry_run)
+            result = self.enrich_album(
+                info,
+                allow_search=False,
+                dry_run=dry_run,
+                seed_category="mb_seed_beets",
+            )
             if result.get("ok"):
                 if result.get("already_enriched"):
                     # treat as success (no work needed)
@@ -694,10 +702,16 @@ class BeetsEnricher:
     def _post_mb_seed(
         self, mb_release_id: str, vgmdb_id: str,
         artist: str, album: str,
-    ) -> str | None:
+        *, category: Category = "mb_seed_dl",
+    ) -> Category | None:
         """If MB has no VGMDB link, post a seed URL to Discord. Returns
         the notifier category that was actually used, or None if MB is
         already linked / mb_release_id is empty.
+
+        ``category`` is the Discord webhook bucket: ``"mb_seed_dl"`` for
+        the OnAlbumDownload hook (single-album enrichments triggered by
+        Lidarr), ``"mb_seed_beets"`` for bulk re-enrichment runs. The
+        notifier falls back gracefully if either webhook is unconfigured.
         """
         if not mb_release_id or mb_release_id.startswith("vgmdb-"):
             return None
@@ -714,10 +728,6 @@ class BeetsEnricher:
             f"VGMDB: [{check.vgmdb_url}]({check.vgmdb_url})\n"
             f"[👉 Click to add link in MusicBrainz]({check.seed_url})"
         )
-        # mb_seed_dl is the channel reserved for the OnAlbumDownload hook
-        # output; the bulk runner sends to mb_seed_beets. The notifier
-        # falls back gracefully if either webhook is unconfigured.
-        category = "mb_seed_dl"
         self.notifier.send(category, title, body, success=True)
         return category
 
