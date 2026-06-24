@@ -238,7 +238,8 @@ POST   /api/v1/enrich/album
 
 POST   /api/v1/enrich/run
        Bulk enrichment (replaces beets-enrich.py)
-       Body: {"artist": "Kenji Kawai", "dry_run": false, "redo": []}
+       Body: {"artist": "Kenji Kawai", "redo": []}
+       Query: ?dry_run=false
        Returns: job_id (background task)
 
 GET    /api/v1/enrich/jobs/{job_id}
@@ -260,7 +261,7 @@ POST   /api/v1/artist/fix-path
 
 POST   /api/v1/artist/fix-all-paths
        Bulk path fix (replaces fix_artist_paths.py)
-       Body: {"dry_run": false}
+       Query: ?dry_run=false
        Returns: job_id
 
 GET    /api/v1/artist/paths

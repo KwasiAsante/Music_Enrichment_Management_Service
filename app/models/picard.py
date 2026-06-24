@@ -35,6 +35,7 @@ class ExportOneResult(BaseModel):
         "False here without an error means: no GITHUB_TOKEN configured.",
     )
     message: str
+    dry_run: bool = False
 
 
 # ── POST /picard/export/full ───────────────────────────────────────────────
@@ -48,3 +49,4 @@ class ExportAllResult(BaseModel):
     )
     gist_updated: bool = False
     errors: list[str] = Field(default_factory=list)
+    dry_run: bool = False

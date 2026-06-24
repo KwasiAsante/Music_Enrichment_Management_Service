@@ -52,12 +52,13 @@ class EnrichAlbumResult(BaseModel):
     )
     message: str = ""
     job_id: str | None = None
+    dry_run: bool = False
 
 
 # ── POST /enrich/run ───────────────────────────────────────────────────────
 class EnrichRunRequest(BaseModel):
-    """Body for ``POST /enrich/run`` — bulk enrichment."""
-    dry_run: bool = False
+    """Body for ``POST /enrich/run`` — bulk enrichment. ``dry_run`` is a
+    query parameter, not a body field — see ``?dry_run=true``."""
     artist: list[str] = Field(
         default_factory=list,
         description="Artist folder names (case-insensitive). Empty = all.",

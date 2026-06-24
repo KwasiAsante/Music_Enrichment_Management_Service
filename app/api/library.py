@@ -52,7 +52,14 @@ def _has_vgmdb_association(mb_release_id: str | None, mapping: dict) -> bool:
 
 # ── POST /library/scan ──────────────────────────────────────────────────────
 @router.post("/scan", response_model=ScanResult)
-def scan_library(req: ScanRequest) -> ScanResult:
+def scan_library(
+    req: ScanRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would change without writing "
+        "album_list.json or deleting anything.",
+    ),
+) -> ScanResult:
     """Rebuild ``album_list.json`` from the music library on disk.
 
     Records the run in the ``jobs`` table (so it shows up in history even
@@ -62,11 +69,11 @@ def scan_library(req: ScanRequest) -> ScanResult:
     job_id = db.create_job("scan")
     db.update_job(job_id, status="running")
     log.info("scan requested (dry_run=%s, cleanup=%s) job=%s",
-             req.dry_run, req.cleanup, job_id)
+             dry_run, req.cleanup, job_id)
 
     scanner = LibraryScanner()
     try:
-        result = scanner.scan(dry_run=req.dry_run, cleanup=req.cleanup)
+        result = scanner.scan(dry_run=dry_run, cleanup=req.cleanup)
     except Exception as exc:  # noqa: BLE001 — surface any failure as 500 + job record
         log.exception("scan job %s failed", job_id)
         db.update_job(job_id, status="failed", append_log=str(exc))

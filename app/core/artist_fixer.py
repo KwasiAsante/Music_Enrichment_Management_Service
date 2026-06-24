@@ -241,6 +241,7 @@ class ArtistFixer:
         *,
         trigger_scan: bool = True,
         settle_delay: float = 3.0,
+        dry_run: bool = False,
     ) -> dict[str, Any]:
         """Resolve and apply the correct path for a single artist.
 
@@ -249,6 +250,11 @@ class ArtistFixer:
         ``settle_delay`` gives Lidarr a moment to finish its own write of
         the new artist before we PUT a path change back to it — the
         original script used 3s; set to 0 in tests.
+
+        ``dry_run`` resolves the correct path — skipping any kanji-folder
+        rename strategy 3 would otherwise perform — and returns before
+        updating Lidarr, sending a Discord notification, or triggering a
+        library scan.
         """
         log.info("fix-one: artist=%s mb=%s path=%s", artist_name, mb_id, artist_path)
         folder_name = Path(artist_path).name
@@ -271,28 +277,37 @@ class ArtistFixer:
         # Synthesise a Lidarr-shaped record for ``_resolve``; we'll fetch
         # the real one before PUTting.
         fake_artist = {"id": artist_id, "foreignArtistId": mb_id, "path": artist_path}
-        correct_path, strategy, alias = self._resolve(fake_artist, mb_map, dry_run=False)
+        correct_path, strategy, alias = self._resolve(fake_artist, mb_map, dry_run=dry_run)
 
         if correct_path is None:
-            sent = self.notifier.send(
-                "artist",
-                "⚠️ Artist Path Fix Failed",
-                f"**{artist_name}**\nCould not determine correct path.\n"
-                f"MB ID: `{mb_id}`",
-                success=False,
-            )
+            sent = False
+            if not dry_run:
+                sent = self.notifier.send(
+                    "artist",
+                    "⚠️ Artist Path Fix Failed",
+                    f"**{artist_name}**\nCould not determine correct path.\n"
+                    f"MB ID: `{mb_id}`",
+                    success=False,
+                )
             return {
                 "ok": False, "new_path": None, "strategy": strategy,
                 "mb_alias": alias,
                 "message": "no strategy succeeded — manual intervention needed",
-                "discord_sent": sent,
+                "discord_sent": sent, "dry_run": dry_run,
             }
 
         if correct_path == artist_path:
             return {
                 "ok": True, "new_path": None, "strategy": strategy,
                 "mb_alias": alias, "message": "path already correct",
-                "discord_sent": False,
+                "discord_sent": False, "dry_run": dry_run,
+            }
+
+        if dry_run:
+            return {
+                "ok": True, "new_path": correct_path, "strategy": strategy,
+                "mb_alias": alias, "message": "would update path (dry run)",
+                "discord_sent": False, "dry_run": True,
             }
 
         # Update Lidarr. Fetch full record first so PUT body has every field.

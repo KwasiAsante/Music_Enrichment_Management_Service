@@ -28,6 +28,7 @@ class MappingEntry(BaseModel):
         description="How the mapping was created: 'manual', 'mb_url_rel', "
         "'catalog', 'barcode', 'title', 'cli'.",
     )
+    dry_run:       bool = False
 
 
 # ── GET /mapping/unmapped ──────────────────────────────────────────────────
@@ -81,3 +82,13 @@ class SetMappingRequest(BaseModel):
     album:    str = ""
     folder:   str = ""
     source:   str = "manual"
+
+
+# ── DELETE /mapping/{mb_release_id} ───────────────────────────────────────
+class DeleteMappingResult(BaseModel):
+    """Response from ``DELETE /mapping/{mb_release_id}``."""
+    deleted: bool = Field(
+        description="True if the entry existed (and was removed, unless "
+        "dry_run was set).",
+    )
+    dry_run: bool = False
