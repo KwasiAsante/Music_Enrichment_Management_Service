@@ -13,14 +13,10 @@ from pydantic import BaseModel, Field
 
 # ── POST /library/scan ──────────────────────────────────────────────────────
 class ScanRequest(BaseModel):
-    """Body for a scan request. Both flags default off — a plain ``{}`` does
-    a normal, non-destructive scan."""
+    """Body for a scan request. ``dry_run`` is a query parameter, not a body
+    field — see ``?dry_run=true``. ``cleanup`` defaults off — a plain ``{}``
+    does a normal, non-destructive scan."""
 
-    dry_run: bool = Field(
-        default=False,
-        description="Report what would change without writing album_list.json "
-        "or deleting anything.",
-    )
     cleanup: bool = Field(
         default=False,
         description="Also run the (non-interactive) cleanup pass that removes "

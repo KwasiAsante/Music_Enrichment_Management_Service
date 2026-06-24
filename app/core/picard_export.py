@@ -56,7 +56,9 @@ class PicardExporter:
         self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
 
     # ── public: single-artist (the Picard hook) ─────────────────────────
-    def export_one(self, artist_folder: str | Path) -> dict[str, Any]:
+    def export_one(
+        self, artist_folder: str | Path, *, dry_run: bool = False,
+    ) -> dict[str, Any]:
         """Process one artist folder.
 
         ``artist_folder`` is whatever Picard's ``%directory%`` token
@@ -64,9 +66,9 @@ class PicardExporter:
         or just the artist folder name. We try the literal path first,
         then fall back to ``artist_root / basename``.
 
-        Returns a result dict suitable for the API response. Always
-        writes the merged file. Uploads to gist only if a token is
-        configured.
+        Returns a result dict suitable for the API response. Writes the
+        merged file and uploads to gist (if a token is configured) unless
+        ``dry_run`` is set, in which case nothing is persisted.
         """
         resolved = self._resolve_artist_folder(artist_folder)
         if resolved is None:
@@ -94,23 +96,30 @@ class PicardExporter:
 
         existing = self._load_existing_dict()
         is_new = resolved.name not in existing
-        existing[resolved.name] = {"Artist": resolved.name, "MusicBrainzId": mb_id}
-        self._save_dict(existing)
 
-        gist_updated = self._upload_to_gist()
-        log.info("exported %s → %s (new=%s, gist=%s)",
-                 resolved.name, mb_id, is_new, gist_updated)
+        if dry_run:
+            gist_updated = False
+        else:
+            existing[resolved.name] = {"Artist": resolved.name, "MusicBrainzId": mb_id}
+            self._save_dict(existing)
+            gist_updated = self._upload_to_gist()
+
+        log.info("exported %s → %s (new=%s, gist=%s, dry_run=%s)",
+                 resolved.name, mb_id, is_new, gist_updated, dry_run)
+        verb = ("would add new entry" if is_new else "would update existing entry") \
+            if dry_run else ("added new entry" if is_new else "updated existing entry")
         return {
             "ok": True, "artist": resolved.name, "mb_id": mb_id,
             "is_new": is_new, "gist_updated": gist_updated,
-            "message": "added new entry" if is_new else "updated existing entry",
+            "message": verb, "dry_run": dry_run,
         }
 
     # ── public: full-library refresh ────────────────────────────────────
-    def export_all(self) -> dict[str, Any]:
+    def export_all(self, *, dry_run: bool = False) -> dict[str, Any]:
         """Walk every artist folder under the music root and rebuild the
         list. *Merges* with the existing file rather than replacing — so
         artists whose folders are temporarily missing are preserved.
+        Writes nothing when ``dry_run`` is set.
         """
         if not self.artist_root.exists():
             return {
@@ -141,13 +150,18 @@ class PicardExporter:
                 new += 1
             existing[folder.name] = {"Artist": folder.name, "MusicBrainzId": mb_id}
 
-        self._save_dict(existing)
-        gist_updated = self._upload_to_gist()
-        log.info("export-all: processed=%d new=%d skipped=%d gist=%s",
-                 processed, new, skipped, gist_updated)
+        if dry_run:
+            gist_updated = False
+        else:
+            self._save_dict(existing)
+            gist_updated = self._upload_to_gist()
+
+        log.info("export-all: processed=%d new=%d skipped=%d gist=%s dry_run=%s",
+                 processed, new, skipped, gist_updated, dry_run)
         return {
             "ok": True, "processed": processed, "new": new,
             "skipped": skipped, "gist_updated": gist_updated, "errors": errors,
+            "dry_run": dry_run,
         }
 
     # ── internal ────────────────────────────────────────────────────────

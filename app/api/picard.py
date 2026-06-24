@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core.picard_export import PicardExporter
 from app.models.picard import ExportAllResult, ExportOneRequest, ExportOneResult
@@ -26,7 +26,14 @@ router = APIRouter(prefix="/api/v1/picard", tags=["picard"])
 
 # ── POST /picard/export ────────────────────────────────────────────────────
 @router.post("/export", response_model=ExportOneResult)
-def export_one(req: ExportOneRequest) -> ExportOneResult:
+def export_one(
+    req: ExportOneRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would be written without touching "
+        "artists_mbids.json or the Gist.",
+    ),
+) -> ExportOneResult:
     """Re-export a single artist's MB album-artist id."""
     job_id = db.create_job("picard_export")
     db.update_job(job_id, status="running")
@@ -34,7 +41,7 @@ def export_one(req: ExportOneRequest) -> ExportOneResult:
              req.artist_folder, job_id)
 
     try:
-        result = PicardExporter().export_one(req.artist_folder)
+        result = PicardExporter().export_one(req.artist_folder, dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001
         log.exception("picard export job %s failed", job_id)
         db.update_job(job_id, status="failed", append_log=str(exc))
@@ -55,14 +62,20 @@ def export_one(req: ExportOneRequest) -> ExportOneResult:
 
 # ── POST /picard/export/full ───────────────────────────────────────────────
 @router.post("/export/full", response_model=ExportAllResult)
-def export_all() -> ExportAllResult:
+def export_all(
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would be written without touching "
+        "artists_mbids.json or the Gist.",
+    ),
+) -> ExportAllResult:
     """Walk the entire artist root and rebuild artists_mbids.json."""
     job_id = db.create_job("picard_export_full")
     db.update_job(job_id, status="running")
     log.info("picard full export requested (job=%s)", job_id)
 
     try:
-        result = PicardExporter().export_all()
+        result = PicardExporter().export_all(dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001
         log.exception("picard full export job %s failed", job_id)
         db.update_job(job_id, status="failed", append_log=str(exc))

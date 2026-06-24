@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.models.mapping import (
+    DeleteMappingResult,
     MappingEntry,
     SearchRequest,
     SearchResult,
@@ -66,7 +67,15 @@ def list_unmapped(
 
 # ── POST /mapping/search ───────────────────────────────────────────────────
 @router.post("/search", response_model=SearchResult)
-def search(req: SearchRequest) -> SearchResult:
+def search(
+    req: SearchRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Accepted for consistency with the other write "
+        "endpoints. Search has no side effects to suppress (it never "
+        "writes vgmdb_mapping.json), so this has no effect on the result.",
+    ),
+) -> SearchResult:
     """Run the four-step VGMDB search pipeline for one album.
 
     The original interactive ``generate-mappings-template.py`` ran this
@@ -102,6 +111,11 @@ def search(req: SearchRequest) -> SearchResult:
 def set_mapping(
     req: SetMappingRequest,
     mb_release_id: str = Path(..., description="MusicBrainz release id (or 'vgmdb-<id>')."),
+    dry_run: bool = Query(
+        default=False,
+        description="Compute and return the entry without writing "
+        "vgmdb_mapping.json.",
+    ),
 ) -> MappingEntry:
     """Insert or update one mapping entry."""
     try:
@@ -112,6 +126,7 @@ def set_mapping(
             album=req.album,
             folder=req.folder,
             source=req.source,
+            dry_run=dry_run,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -127,12 +142,17 @@ def set_mapping(
 
 
 # ── DELETE /mapping/{mb_release_id} ────────────────────────────────────────
-@router.delete("/{mb_release_id:path}")
+@router.delete("/{mb_release_id:path}", response_model=DeleteMappingResult)
 def delete_mapping(
     mb_release_id: str = Path(..., description="MusicBrainz release id."),
-) -> dict[str, bool]:
-    """Remove a mapping entry. Returns ``{"deleted": true|false}``."""
-    ok = VGMDBMapper().delete_mapping(mb_release_id)
-    if ok:
+    dry_run: bool = Query(
+        default=False,
+        description="Report whether the entry exists (and would be "
+        "removed) without writing vgmdb_mapping.json.",
+    ),
+) -> DeleteMappingResult:
+    """Remove a mapping entry."""
+    ok = VGMDBMapper().delete_mapping(mb_release_id, dry_run=dry_run)
+    if ok and not dry_run:
         db.add_activity("mapping", f"deleted mapping {mb_release_id}")
-    return {"deleted": ok}
+    return DeleteMappingResult(deleted=ok, dry_run=dry_run)

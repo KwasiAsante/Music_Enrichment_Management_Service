@@ -4,8 +4,10 @@ Three request/response shapes:
 
 * ``FixPathRequest`` / ``FixOneResult`` — body and response for
   ``POST /fix-path``, called by the Lidarr ``OnArtistAdd`` thin wrapper.
-* ``FixAllRequest`` / ``FixAllResult`` — body and response for
-  ``POST /fix-all-paths``, the bulk endpoint.
+  Both ``fix-path`` and the bulk endpoint take ``dry_run`` as a query
+  parameter (``?dry_run=true``), not a body field.
+* ``FixAllResult`` — response for ``POST /fix-all-paths``, the bulk
+  endpoint.
 * ``ArtistPathSuggestion`` — entries returned by ``GET /paths``.
 """
 
@@ -50,15 +52,10 @@ class FixOneResult(BaseModel):
     )
     message: str
     discord_sent: bool = False
+    dry_run: bool = False
 
 
 # ── POST /artist/fix-all-paths ─────────────────────────────────────────────
-class FixAllRequest(BaseModel):
-    """Body for ``POST /artist/fix-all-paths``."""
-
-    dry_run: bool = Field(default=False, description="Report what would change without writing.")
-
-
 class FixedRow(BaseModel):
     """One row in the ``fixed`` / ``would_fix`` arrays of FixAllResult."""
 
