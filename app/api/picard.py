@@ -19,7 +19,7 @@ from app.core.picard_export import PicardExporter
 from app.models.picard import ExportAllResult, ExportOneRequest, ExportOneResult
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.picard")
+log = logging.getLogger("music-lib-helper.api.picard")
 
 router = APIRouter(prefix="/api/v1/picard", tags=["picard"])
 

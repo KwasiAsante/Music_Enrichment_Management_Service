@@ -2,8 +2,8 @@
 
 Two slim Python scripts Lidarr's **Connect → Custom Script** feature
 invokes for the events we care about. Each one is a thin HTTP forwarder
-to the helper service running at `${LIDARR_HELPER_URL}` (default
-`http://lidarr-helper:8900`); all logic lives in the container.
+to the helper service running at `${MUSIC_LIB_HELPER_URL}` (default
+`http://music-lib-helper:8900`); all logic lives in the container.
 
 | Script | Lidarr event | Endpoint | Timeout |
 |---|---|---|---|
@@ -27,10 +27,10 @@ via the helper's `/api/v1/enrich/run` bulk endpoint.
 2. **(Optional) Tell the wrappers where the helper lives.** If you're
    running Lidarr and the helper on the same Docker network with the
    default service name, nothing to do. Otherwise set
-   `LIDARR_HELPER_URL` in Lidarr's environment (compose file):
+   `MUSIC_LIB_HELPER_URL` in Lidarr's environment (compose file):
 
        environment:
-         - LIDARR_HELPER_URL=http://192.168.2.130:8900
+         - MUSIC_LIB_HELPER_URL=http://192.168.2.130:8900
 
 3. **Configure each script in Lidarr's UI:**
 

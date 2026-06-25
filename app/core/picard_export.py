@@ -40,7 +40,7 @@ from app.core.artist_fixer import (
 )
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.picard")
+log = logging.getLogger("music-lib-helper.picard")
 
 GIST_API_BASE   = "https://api.github.com"
 GIST_FILENAME   = "artists_mbids.json"

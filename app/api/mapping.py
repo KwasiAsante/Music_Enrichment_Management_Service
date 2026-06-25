@@ -29,7 +29,7 @@ from app.models.mapping import (
 )
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.mapping")
+log = logging.getLogger("music-lib-helper.api.mapping")
 
 router = APIRouter(prefix="/api/v1/mapping", tags=["mapping"])
 

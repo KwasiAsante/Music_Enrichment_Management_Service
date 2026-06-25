@@ -48,7 +48,7 @@ from app.core.lidarr_client import LidarrClient
 from app.core.mb_client import MBClient
 from app.core.notifier import Notifier
 
-log = logging.getLogger("lidarr-helper.artist_fixer")
+log = logging.getLogger("music-lib-helper.artist_fixer")
 
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
 

@@ -3,7 +3,7 @@
 
 This is the slim version. All the actual enrichment logic lives in the
 helper service; this script just collects Lidarr's environment variables
-and POSTs them to ``${LIDARR_HELPER_URL}/api/v1/enrich/album``.
+and POSTs them to ``${MUSIC_LIB_HELPER_URL}/api/v1/enrich/album``.
 
 Wiring in Lidarr:
     Settings → Connect → Custom Script
@@ -12,7 +12,7 @@ Wiring in Lidarr:
       Path:   /config/scripts/on_album_download.py
 
 Environment:
-    LIDARR_HELPER_URL   default: http://lidarr-helper:8900
+    MUSIC_LIB_HELPER_URL   default: http://music-lib-helper:8900
                         Override if you run the helper elsewhere on the LAN.
 
 Failure handling:
@@ -33,7 +33,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-HELPER_URL = os.environ.get("LIDARR_HELPER_URL", "http://lidarr-helper:8900").rstrip("/")
+HELPER_URL = os.environ.get("MUSIC_LIB_HELPER_URL", "http://music-lib-helper:8900").rstrip("/")
 ENDPOINT   = f"{HELPER_URL}/api/v1/enrich/album"
 TIMEOUT    = 600  # seconds — enrichment can take a while
 LOG_FILE   = Path("/config/scripts/on_album_download.log")

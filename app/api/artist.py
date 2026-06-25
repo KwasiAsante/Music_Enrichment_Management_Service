@@ -33,7 +33,7 @@ from app.models.artist import (
 )
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.artist")
+log = logging.getLogger("music-lib-helper.api.artist")
 
 router = APIRouter(prefix="/api/v1/artist", tags=["artist"])
 

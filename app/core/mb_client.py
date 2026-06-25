@@ -35,7 +35,7 @@ import httpx
 from app.config import settings
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.mb")
+log = logging.getLogger("music-lib-helper.mb")
 
 _BASE = "https://musicbrainz.org/ws/2"
 

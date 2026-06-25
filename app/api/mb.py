@@ -22,7 +22,7 @@ from app.core.mb_client import MBClient
 from app.core.mb_link import MBLinkChecker
 from app.models.mb import ArtistAliasResult, VGMDBLinkResult
 
-log = logging.getLogger("lidarr-helper.api.mb")
+log = logging.getLogger("music-lib-helper.api.mb")
 
 router = APIRouter(prefix="/api/v1/mb", tags=["musicbrainz"])
 

@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.db")
+log = logging.getLogger("music-lib-helper.db")
 
 # Valid job lifecycle states. Kept as a module constant so callers and
 # tests share one definition.

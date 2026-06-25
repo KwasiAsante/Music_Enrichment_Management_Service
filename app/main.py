@@ -29,14 +29,14 @@ logging.basicConfig(
     level=getattr(logging, settings.app_log_level.upper(), logging.INFO),
     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
 )
-log = logging.getLogger("lidarr-helper")
+log = logging.getLogger("music-lib-helper")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown hook. Runs once per process lifecycle."""
 
-    log.info("lidarr-helper v%s starting", __version__)
+    log.info("music-lib-helper v%s starting", __version__)
     log.info("data dir:  %s", settings.app_data_dir)
     log.info("music dir: %s", settings.app_music_dir)
     log.info("lidarr:    %s", settings.lidarr_url)
@@ -65,11 +65,11 @@ async def lifespan(app: FastAPI):
     yield
 
     scheduler.stop()
-    log.info("lidarr-helper shutting down")
+    log.info("music-lib-helper shutting down")
 
 
 app = FastAPI(
-    title="Lidarr Helper",
+    title="Music Library Helper",
     description=(
         "Consolidated REST API for Lidarr/Picard music library "
         "enrichment workflows."
@@ -102,7 +102,7 @@ async def health() -> dict[str, object]:
 async def root() -> dict[str, str]:
     """Tiny landing endpoint. The web UI replaces this in Phase 2."""
     return {
-        "service": "lidarr-helper",
+        "service": "music-lib-helper",
         "version": __version__,
         "docs": "/docs",
         "health": "/health",

@@ -27,7 +27,7 @@ import httpx
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.vgmdb")
+log = logging.getLogger("music-lib-helper.vgmdb")
 
 
 class VGMDBHint(TypedDict, total=False):

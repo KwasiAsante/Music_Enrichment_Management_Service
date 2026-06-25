@@ -39,7 +39,7 @@ from app.models.enrich import (
 )
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.enrich")
+log = logging.getLogger("music-lib-helper.api.enrich")
 
 router = APIRouter(prefix="/api/v1/enrich", tags=["enrich"])
 

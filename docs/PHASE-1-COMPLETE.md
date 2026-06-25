@@ -1,7 +1,7 @@
 # Phase 1 — Complete
 
 Status snapshot for the next conversation. Pair this with
-[`lidarr-helper-service-plan.md`](./lidarr-helper-service-plan.md) for
+[`music-lib-helper-service-plan.md`](./music-lib-helper-service-plan.md) for
 the full architecture.
 
 ---
@@ -60,7 +60,7 @@ All three are stdlib-only and always exit 0.
 
 ### Docker
 - `Dockerfile` (python:3.12-slim + ffmpeg + beets + custom VGMplug + tini)
-- `docker-compose.yml` (env_file `.env`, named `lidarr-helper-data` volume, music **bind-mount read-write** per design-decision #4, external `arrs_default` network, healthcheck on `/health`)
+- `docker-compose.yml` (env_file `.env`, named `music-lib-helper-data` volume, music **bind-mount read-write** per design-decision #4, external `arrs_default` network, healthcheck on `/health`)
 - `.env.example` (every variable documented; `.env` already exists with placeholders)
 
 ---
@@ -179,8 +179,8 @@ mocked. Worth shaking out with a real container build.
 The repo *is* the documentation. The fastest cold-start prompt:
 
 > I'm continuing work on the Music Enrichment Management Service
-> Lidarr helper. Phase 1 is complete. Please read
-> `docs/PHASE-1-COMPLETE.md` and `docs/lidarr-helper-service-plan.md`
+> (Music Library Helper). Phase 1 is complete. Please read
+> `docs/PHASE-1-COMPLETE.md` and `docs/music-lib-helper-service-plan.md`
 > in this workspace folder, then we'll start on Phase 2 (the Web UI).
 
 That alone gives the next assistant the full picture without you

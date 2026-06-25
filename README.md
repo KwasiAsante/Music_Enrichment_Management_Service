@@ -1,6 +1,6 @@
 # Music Enrichment Management Service
 
-A self-contained Docker service ("lidarr-helper") that consolidates a
+A self-contained Docker service ("music-lib-helper") that consolidates a
 Lidarr/Picard music-library enrichment pipeline into one FastAPI app.
 It's tuned for soundtrack/VGM (video game & anime music) collections,
 where MusicBrainz metadata is often thin and [VGMDB](https://vgmdb.net)
@@ -20,7 +20,7 @@ What it does:
 
 ## Documentation
 
-- [`docs/lidarr-helper-service-plan.md`](docs/lidarr-helper-service-plan.md)
+- [`docs/music-lib-helper-service-plan.md`](docs/music-lib-helper-service-plan.md)
   — full architecture, API reference, and design decisions.
 - [`docs/PHASE-1-COMPLETE.md`](docs/PHASE-1-COMPLETE.md) — status
   snapshot of what's built (Phase 1, core API) and what's next (Phase 2,

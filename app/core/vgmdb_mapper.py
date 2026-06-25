@@ -31,7 +31,7 @@ from app.core.mb_client import MBClient
 from app.core.vgmdb_client import VGMDBClient, VGMDBHint
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.vgmdb_mapper")
+log = logging.getLogger("music-lib-helper.vgmdb_mapper")
 
 # Artists explicitly excluded from "unmapped" listings — they're Western
 # acts that intentionally have no VGMDB presence. Customise to taste; the

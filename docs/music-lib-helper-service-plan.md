@@ -1,4 +1,4 @@
-# Lidarr Helper Service — Architecture & Implementation Plan
+# Music Library Helper Service — Architecture & Implementation Plan
 > A self-contained Docker service that consolidates all custom scripts into a
 > single deployable web UI + API server. Pull the repo, run `docker compose up`,
 > and the entire enrichment pipeline is restored.
@@ -63,7 +63,7 @@ The existing `proxy.py` (music search proxy) gets merged into this service — o
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    lidarr-helper  (Docker container)                         │
+│                    music-lib-helper  (Docker container)                      │
 │                                                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │                         FastAPI Application                          │    │
@@ -98,7 +98,7 @@ The existing `proxy.py` (music search proxy) gets merged into this service — o
         │                    │                    │
         ▼                    ▼                    ▼
    Lidarr :8686         Picard :5800        Caddy (reverse proxy)
-   (custom scripts       (Post-Tagging       /lidarr-helper/*
+   (custom scripts       (Post-Tagging       /music-lib-helper/*
     call /api/v1/)        Action calls
                           /api/v1/picard/)
 ```
@@ -108,7 +108,7 @@ The existing `proxy.py` (music search proxy) gets merged into this service — o
 ## Project Structure
 
 ```
-lidarr-helper/
+music-lib-helper/
 │
 ├── docker-compose.yml          # Standalone compose (for the helper service only)
 ├── Dockerfile
@@ -307,7 +307,7 @@ GET    /music-search         → serves music-search.html
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Lidarr Helper                            v1.0.0     │
+│  Music Library Helper                     v1.0.0     │
 ├─────────────────────────────────────────────────────┤
 │                                                       │
 │  Library Stats                                        │
@@ -459,9 +459,9 @@ httpx>=0.27.0
 
 ```yaml
 services:
-  lidarr-helper:
+  music-lib-helper:
     build: .
-    container_name: lidarr-helper
+    container_name: music-lib-helper
     restart: unless-stopped
     ports:
       - "8900:8900"
@@ -480,7 +480,7 @@ services:
       # VGMDB
       - VGMDB_URL=http://192.168.2.172:8008
       # MusicBrainz
-      - MB_USER_AGENT=LidarrHelper/1.0 (kwasi@local)
+      - MB_USER_AGENT=MusicLibHelper/1.0 (kwasi@local)
       # Discord webhooks
       - DISCORD_WEBHOOK_ARTIST=https://discord.com/api/webhooks/...
       - DISCORD_WEBHOOK_ENRICH=https://discord.com/api/webhooks/...
@@ -495,14 +495,14 @@ services:
       - SCAN_CRON=0 2 * * 0
       - ENRICH_CRON=0 3 * * 0
     volumes:
-      - lidarr-helper-data:/data           # persistent state files
+      - music-lib-helper-data:/data        # persistent state files
       - ~/Music:/music                     # music library (read-write)
       - ~/.local:/home/user/.local:ro      # beets bin + config
     networks:
       - arrs_default
 
 volumes:
-  lidarr-helper-data:
+  music-lib-helper-data:
 
 networks:
   arrs_default:
@@ -522,7 +522,7 @@ The existing `on_artist_add.py` and `on_album_download.py` in Lidarr become **th
 #!/usr/bin/env python3
 import os, requests
 
-HELPER_URL = os.environ.get('LIDARR_HELPER_URL', 'http://lidarr-helper:8900')
+HELPER_URL = os.environ.get('MUSIC_LIB_HELPER_URL', 'http://music-lib-helper:8900')
 
 payload = {
     'artist_name':   os.environ.get('lidarr_artist_name', ''),
@@ -539,7 +539,7 @@ requests.post(f'{HELPER_URL}/api/v1/enrich/album', json=payload, timeout=600)
 #!/usr/bin/env python3
 import os, requests
 
-HELPER_URL = os.environ.get('LIDARR_HELPER_URL', 'http://lidarr-helper:8900')
+HELPER_URL = os.environ.get('MUSIC_LIB_HELPER_URL', 'http://music-lib-helper:8900')
 
 payload = {
     'artist_id':   os.environ.get('lidarr_artist_id', ''),
@@ -565,7 +565,7 @@ Where `picard_trigger.py` is a slim wrapper:
 #!/usr/bin/env python3
 import sys, requests, os
 
-HELPER_URL = os.environ.get('LIDARR_HELPER_URL', 'http://192.168.2.130:8900')
+HELPER_URL = os.environ.get('MUSIC_LIB_HELPER_URL', 'http://192.168.2.130:8900')
 artist_folder = sys.argv[sys.argv.index('--artist') + 1] if '--artist' in sys.argv else ''
 requests.post(f'{HELPER_URL}/api/v1/picard/export', json={'artist_folder': artist_folder}, timeout=30)
 ```
@@ -574,7 +574,7 @@ requests.post(f'{HELPER_URL}/api/v1/picard/export', json={'artist_folder': artis
 
 Add to `Caddyfile` under `kaneservarr.duckdns.org`:
 ```caddy
-handle /lidarr-helper* {
+handle /music-lib-helper* {
     reverse_proxy 192.168.2.130:8900
 }
 
@@ -653,7 +653,7 @@ handle /music-search* {
 
 **5. Beets runs inside the container** — beets and the vgmdb plugin are installed in the container image. No dependency on the host's `~/.local/bin/beet`.
 
-**6. Single port** — everything on port `8900`. The proxy routes, web UI, API, and music search all served from one FastAPI app. Caddy routes `/lidarr-helper/*` to it.
+**6. Single port** — everything on port `8900`. The proxy routes, web UI, API, and music search all served from one FastAPI app. Caddy routes `/music-lib-helper/*` to it.
 
 ---
 

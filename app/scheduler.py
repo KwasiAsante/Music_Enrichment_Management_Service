@@ -34,7 +34,7 @@ from app.core.beets_enricher import BeetsEnricher
 from app.core.library_scanner import LibraryScanner
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.scheduler")
+log = logging.getLogger("music-lib-helper.scheduler")
 
 # Module-level handle. ``None`` when not running. Tests can read this to
 # assert what got registered.

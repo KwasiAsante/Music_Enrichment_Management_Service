@@ -55,7 +55,7 @@ from app.core.vgmdb_mapper import VGMDBMapper
 from app.storage import db
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.beets_enricher")
+log = logging.getLogger("music-lib-helper.beets_enricher")
 
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
 

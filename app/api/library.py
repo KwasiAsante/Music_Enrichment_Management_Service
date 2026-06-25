@@ -34,7 +34,7 @@ from app.models.library import (
 from app.storage import db
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.api.library")
+log = logging.getLogger("music-lib-helper.api.library")
 
 router = APIRouter(prefix="/api/v1/library", tags=["library"])
 

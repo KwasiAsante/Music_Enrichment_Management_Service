@@ -37,7 +37,7 @@ from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 from app.config import settings
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.scanner")
+log = logging.getLogger("music-lib-helper.scanner")
 
 AUDIO_EXTS: set[str] = {
     ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape",

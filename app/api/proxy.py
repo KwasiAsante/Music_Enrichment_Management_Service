@@ -37,7 +37,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.proxy")
+log = logging.getLogger("music-lib-helper.proxy")
 
 router = APIRouter(tags=["proxy"])
 

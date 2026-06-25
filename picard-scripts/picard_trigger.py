@@ -18,7 +18,7 @@ Wiring in Picard:
     that resolution.
 
 Environment:
-    LIDARR_HELPER_URL   default: http://192.168.2.130:8900
+    MUSIC_LIB_HELPER_URL   default: http://192.168.2.130:8900
                         Picard usually runs on the desktop, not in the
                         Docker network, so set this to the helper's
                         LAN address.
@@ -37,7 +37,7 @@ from datetime import datetime
 from pathlib import Path
 
 HELPER_URL = os.environ.get(
-    "LIDARR_HELPER_URL", "http://192.168.2.130:8900"
+    "MUSIC_LIB_HELPER_URL", "http://192.168.2.130:8900"
 ).rstrip("/")
 ENDPOINT = f"{HELPER_URL}/api/v1/picard/export"
 TIMEOUT  = 30

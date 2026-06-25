@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     vgmdb_url: str = "http://192.168.2.172:8008"
 
     # ── MusicBrainz ─────────────────────────────────────────────────────────
-    mb_user_agent: str = "LidarrHelper/1.0 (you@example.com)"
+    mb_user_agent: str = "MusicLibHelper/1.0 (you@example.com)"
 
     # ── Discord webhooks ────────────────────────────────────────────────────
     discord_webhook_artist: str = ""

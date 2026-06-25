@@ -11,7 +11,7 @@ Wiring in Lidarr:
       Path:    /config/scripts/on_artist_add.py
 
 Environment:
-    LIDARR_HELPER_URL   default: http://lidarr-helper:8900
+    MUSIC_LIB_HELPER_URL   default: http://music-lib-helper:8900
 
 Failure handling: always exits 0. See on_album_download.py for the
 rationale. Stdlib only.
@@ -27,7 +27,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-HELPER_URL = os.environ.get("LIDARR_HELPER_URL", "http://lidarr-helper:8900").rstrip("/")
+HELPER_URL = os.environ.get("MUSIC_LIB_HELPER_URL", "http://music-lib-helper:8900").rstrip("/")
 ENDPOINT   = f"{HELPER_URL}/api/v1/artist/fix-path"
 TIMEOUT    = 60
 LOG_FILE   = Path("/config/scripts/on_artist_add.log")
