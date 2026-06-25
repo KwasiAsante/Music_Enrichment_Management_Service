@@ -16,7 +16,7 @@ services:
     volumes:
       # Persistent state (vgmdb_mapping.json, enriched_albums.json,
       # album_list.json, mb_artist_cache.json, app.db, etc.)
-      - music-lib-helper-data:/data
+      - ./data:/data
       # Music library, read-write. The enrichment pipeline writes here:
       # `beet` writes tags on import, non-Latin artist tags get rewritten
       # via mutagen, artist folders get renamed, and the opt-in cleanup

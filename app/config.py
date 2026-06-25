@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     qbit_save_path: str = "/downloads/servarr-downloads"
 
     # ── VGMDB ───────────────────────────────────────────────────────────────
-    vgmdb_url: str = "http://192.168.2.172:8008"
+    vgmdb_url: str = "http://192.168.2.130:8008"
 
     # ── MusicBrainz ─────────────────────────────────────────────────────────
     mb_user_agent: str = "MusicLibHelper/1.0 (you@example.com)"
