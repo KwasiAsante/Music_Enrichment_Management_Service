@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 
 from app.core.mb_client import MBClient
 
-log = logging.getLogger("lidarr-helper.mb_link")
+log = logging.getLogger("music-lib-helper.mb_link")
 
 # MB relationship type UUID for the "VGMdb" link on releases. Hard-coded
 # because it's a fixed identifier in the MusicBrainz schema, not config.
@@ -105,6 +105,6 @@ class MBLinkChecker:
             "edit-release.url.0.link_type_id": VGMDB_REL_UUID,
             "edit-release.edit_note":
                 f"Adding VGMDB link: {vgmdb_url} "
-                "— auto-detected by LidarrHelper",
+                "— auto-detected by MusicLibHelper",
         })
         return f"https://musicbrainz.org/release/{mb_release_id}/edit?{params}"

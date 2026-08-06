@@ -1,7 +1,7 @@
 # ── Core settings ─────────────────────────────────────────────────────────────
 # NOTE: paths below are CONTAINER paths (matching the docker-compose mounts).
 # The bind mount `${HOST_MUSIC_DIR}:/music` and the named volume
-# `lidarr-helper-data:/data` are what these resolve against at runtime.
+# `music-lib-helper-data:/data` are what these resolve against at runtime.
 
 # Point at your music library (matches volumes: in docker-compose.yml)
 directory: /music/synced_music/Artist

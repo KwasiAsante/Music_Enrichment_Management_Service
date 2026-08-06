@@ -4,9 +4,9 @@ Three endpoints:
 
 * ``POST /fix-path``       — called by Lidarr's OnArtistAdd thin wrapper
                              (``lidarr-scripts/on_artist_add.py``).
-                             Single artist, no dry-run.
+                             Single artist. Supports ``?dry_run=true``.
 * ``POST /fix-all-paths``  — bulk fix across every non-Latin artist.
-                             Supports ``dry_run``.
+                             Supports ``?dry_run=true``.
 * ``GET  /paths``          — read-only list of non-Latin artists with
                              the path each would be renamed to.
 
@@ -22,26 +22,32 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core.artist_fixer import ArtistFixer
 from app.models.artist import (
     ArtistPathSuggestion,
-    FixAllRequest,
     FixAllResult,
     FixOneResult,
     FixPathRequest,
 )
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.artist")
+log = logging.getLogger("music-lib-helper.api.artist")
 
 router = APIRouter(prefix="/api/v1/artist", tags=["artist"])
 
 
 # ── POST /artist/fix-path ───────────────────────────────────────────────────
 @router.post("/fix-path", response_model=FixOneResult)
-def fix_path(req: FixPathRequest) -> FixOneResult:
+def fix_path(
+    req: FixPathRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Resolve the correct path without updating Lidarr, "
+        "renaming any folder, or sending a Discord notification.",
+    ),
+) -> FixOneResult:
     """Fix one artist's path. Called by Lidarr's OnArtistAdd custom script."""
 
     # Treat Lidarr's "Test" pings and empty event types as a no-op success,
@@ -70,6 +76,7 @@ def fix_path(req: FixPathRequest) -> FixOneResult:
             mb_id=req.mb_id,
             artist_name=req.artist_name,
             artist_path=req.artist_path,
+            dry_run=dry_run,
         )
     except Exception as exc:  # noqa: BLE001
         log.exception("fix-path job %s failed", job_id)
@@ -90,15 +97,21 @@ def fix_path(req: FixPathRequest) -> FixOneResult:
 
 # ── POST /artist/fix-all-paths ──────────────────────────────────────────────
 @router.post("/fix-all-paths", response_model=FixAllResult)
-def fix_all_paths(req: FixAllRequest) -> FixAllResult:
+def fix_all_paths(
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would change without updating Lidarr "
+        "or renaming any folders.",
+    ),
+) -> FixAllResult:
     """Bulk fix all artists with non-Latin folder paths."""
     job_id = db.create_job("fix_all_paths")
     db.update_job(job_id, status="running")
-    log.info("fix-all requested (dry_run=%s, job=%s)", req.dry_run, job_id)
+    log.info("fix-all requested (dry_run=%s, job=%s)", dry_run, job_id)
 
     fixer = ArtistFixer()
     try:
-        result = fixer.fix_all(dry_run=req.dry_run)
+        result = fixer.fix_all(dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001
         log.exception("fix-all job %s failed", job_id)
         db.update_job(job_id, status="failed", append_log=str(exc))

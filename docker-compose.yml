@@ -1,13 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  Lidarr Helper Service
+#  Music Library Helper Service
 #  Reads all configuration from .env (see .env.example).
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  lidarr-helper:
+  music-lib-helper:
     build: .
-    image: lidarr-helper:local
-    container_name: lidarr-helper
+    image: music-lib-helper:local
+    container_name: music-lib-helper
     restart: unless-stopped
     env_file:
       - .env
@@ -16,7 +16,7 @@ services:
     volumes:
       # Persistent state (vgmdb_mapping.json, enriched_albums.json,
       # album_list.json, mb_artist_cache.json, app.db, etc.)
-      - lidarr-helper-data:/data
+      - ./data:/data
       # Music library, read-write. The enrichment pipeline writes here:
       # `beet` writes tags on import, non-Latin artist tags get rewritten
       # via mutagen, artist folders get renamed, and the opt-in cleanup
@@ -32,7 +32,7 @@ services:
       - arrs_default
 
 volumes:
-  lidarr-helper-data:
+  music-lib-helper-data:
 
 networks:
   arrs_default:

@@ -19,7 +19,7 @@ import httpx
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.lidarr")
+log = logging.getLogger("music-lib-helper.lidarr")
 
 
 class LidarrClient:

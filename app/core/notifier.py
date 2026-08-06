@@ -19,7 +19,7 @@ import httpx
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.notifier")
+log = logging.getLogger("music-lib-helper.notifier")
 
 # Discord embed colours used across the originals: green for success,
 # red for failure. Mirrored here so the look is consistent.

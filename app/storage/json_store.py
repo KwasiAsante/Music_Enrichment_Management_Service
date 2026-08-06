@@ -35,7 +35,7 @@ from typing import Any
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.storage")
+log = logging.getLogger("music-lib-helper.storage")
 
 
 class JsonFile:

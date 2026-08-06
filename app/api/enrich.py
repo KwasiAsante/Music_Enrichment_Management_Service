@@ -39,14 +39,21 @@ from app.models.enrich import (
 )
 from app.storage import db
 
-log = logging.getLogger("lidarr-helper.api.enrich")
+log = logging.getLogger("music-lib-helper.api.enrich")
 
 router = APIRouter(prefix="/api/v1/enrich", tags=["enrich"])
 
 
 # ── POST /enrich/album ─────────────────────────────────────────────────────
 @router.post("/album", response_model=EnrichAlbumResult)
-def enrich_album(req: EnrichAlbumRequest) -> EnrichAlbumResult:
+def enrich_album(
+    req: EnrichAlbumRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Resolve the VGMDB id but skip the beet import, tag "
+        "fixes, and notifications.",
+    ),
+) -> EnrichAlbumResult:
     """Enrich one album. Called by the Lidarr OnAlbumDownload wrapper."""
 
     # Accept Test / empty / non-AlbumDownload events as no-ops so the
@@ -91,7 +98,7 @@ def enrich_album(req: EnrichAlbumRequest) -> EnrichAlbumResult:
         "folder":        str(album_folder),
     }
     try:
-        result = BeetsEnricher().enrich_album(info, allow_search=True)
+        result = BeetsEnricher().enrich_album(info, allow_search=True, dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001
         log.exception("enrich_album job %s failed", job_id)
         db.update_job(job_id, status="failed", append_log=str(exc))
@@ -108,7 +115,14 @@ def enrich_album(req: EnrichAlbumRequest) -> EnrichAlbumResult:
 
 # ── POST /enrich/run ───────────────────────────────────────────────────────
 @router.post("/run", response_model=EnrichRunStarted)
-def enrich_run(req: EnrichRunRequest) -> EnrichRunStarted:
+def enrich_run(
+    req: EnrichRunRequest,
+    dry_run: bool = Query(
+        default=False,
+        description="Resolve VGMDB ids and report what would be enriched "
+        "without invoking beet.",
+    ),
+) -> EnrichRunStarted:
     """Start a bulk-enrichment job. Returns immediately with a job_id."""
     # Pre-size progress_total later — the worker will set it once it's
     # built the plan.
@@ -116,12 +130,12 @@ def enrich_run(req: EnrichRunRequest) -> EnrichRunStarted:
     db.update_job(job_id, status="pending")
     log.info("enrich-run queued (dry_run=%s, artist=%s, album=%s, redo=%s, "
              "redo_skipped=%s, job=%s)",
-             req.dry_run, req.artist, req.album, req.redo,
+             dry_run, req.artist, req.album, req.redo,
              req.redo_skipped, job_id)
 
     thread = threading.Thread(
         target=_run_bulk_in_thread,
-        args=(job_id, req.dry_run, req.artist, req.album, req.redo,
+        args=(job_id, dry_run, req.artist, req.album, req.redo,
               req.redo_skipped),
         daemon=True,
         name=f"enrich-{job_id[:8]}",

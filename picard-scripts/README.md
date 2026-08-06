@@ -20,10 +20,10 @@ Gist if a token is configured).
 
 2. **Tell the wrapper where the helper lives.** Picard isn't on the
    Docker network, so the default `localhost:8900` won't work. Set
-   `LIDARR_HELPER_URL` in Picard's environment (or just edit the
+   `MUSIC_LIB_HELPER_URL` in Picard's environment (or just edit the
    `HELPER_URL` default in the script):
 
-       export LIDARR_HELPER_URL=http://192.168.2.130:8900
+       export MUSIC_LIB_HELPER_URL=http://192.168.2.130:8900
 
 3. **Add the Post-Tagging Action in Picard:**
 

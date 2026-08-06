@@ -31,7 +31,7 @@ from app.core.mb_client import MBClient
 from app.core.vgmdb_client import VGMDBClient, VGMDBHint
 from app.storage.json_store import store
 
-log = logging.getLogger("lidarr-helper.vgmdb_mapper")
+log = logging.getLogger("music-lib-helper.vgmdb_mapper")
 
 # Artists explicitly excluded from "unmapped" listings — they're Western
 # acts that intentionally have no VGMDB presence. Customise to taste; the
@@ -299,6 +299,7 @@ class VGMDBMapper:
         album: str = "",
         folder: str = "",
         source: str = "manual",
+        dry_run: bool = False,
     ) -> dict:
         """Insert or update one mapping entry.
 
@@ -306,7 +307,8 @@ class VGMDBMapper:
         use that as a sentinel meaning "this album is not on VGMDB; don't
         ask about it again". Empty ``artist``/``album``/``folder`` get
         backfilled from ``album_list.json`` if a row exists for the
-        ``mb_release_id``.
+        ``mb_release_id``. ``dry_run`` computes and returns the entry
+        without writing it to ``vgmdb_mapping.json``.
         """
         if not mb_release_id:
             raise ValueError("mb_release_id is required")
@@ -322,7 +324,6 @@ class VGMDBMapper:
                     folder = folder or (info.get("folder") or fname)
                     break
 
-        mapping = store.vgmdb_mapping.read()
         entry = {
             "vgmdb_id": str(vgmdb_id),
             "folder":   folder,
@@ -330,20 +331,34 @@ class VGMDBMapper:
             "album":    album,
             "source":   source,
         }
-        mapping[mb_release_id] = entry
-        store.vgmdb_mapping.write(mapping)
-        log.info("mapping set: %s → vgmdb:%s (source=%s)",
-                 mb_release_id, vgmdb_id, source)
+
+        if dry_run:
+            log.info("mapping set (dry run): %s → vgmdb:%s (source=%s)",
+                     mb_release_id, vgmdb_id, source)
+        else:
+            mapping = store.vgmdb_mapping.read()
+            mapping[mb_release_id] = entry
+            store.vgmdb_mapping.write(mapping)
+            log.info("mapping set: %s → vgmdb:%s (source=%s)",
+                     mb_release_id, vgmdb_id, source)
 
         out = dict(entry)
         out["mb_release_id"] = mb_release_id
+        out["dry_run"] = dry_run
         return out
 
-    def delete_mapping(self, mb_release_id: str) -> bool:
-        """Remove a mapping. Returns True if it existed, False otherwise."""
+    def delete_mapping(self, mb_release_id: str, *, dry_run: bool = False) -> bool:
+        """Remove a mapping. Returns True if it existed, False otherwise.
+
+        With ``dry_run``, reports whether it *would* be deleted without
+        writing.
+        """
         mapping = store.vgmdb_mapping.read()
         if mb_release_id not in mapping:
             return False
+        if dry_run:
+            log.info("mapping delete (dry run): %s would be removed", mb_release_id)
+            return True
         del mapping[mb_release_id]
         store.vgmdb_mapping.write(mapping)
         log.info("mapping deleted: %s", mb_release_id)
