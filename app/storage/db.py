@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 from app.config import settings
 
-log = logging.getLogger("lidarr-helper.db")
+log = logging.getLogger("music-lib-helper.db")
 
 # Valid job lifecycle states. Kept as a module constant so callers and
 # tests share one definition.
@@ -205,8 +205,13 @@ def list_activity(
     limit: int = 100,
     category: Optional[str] = None,
     artist: Optional[str] = None,
+    level: Optional[str] = None,
 ) -> list[dict]:
-    """Return recent activity-log entries, newest first, with optional filters."""
+    """Return recent activity-log entries, newest first, with optional filters.
+
+    ``level`` was added for the Logs page (Phase 2) — same equality-filter
+    pattern as ``category``/``artist``, not a new query shape.
+    """
     query = "SELECT * FROM activity_log"
     where: list[str] = []
     params: list[Any] = []
@@ -216,6 +221,9 @@ def list_activity(
     if artist:
         where.append("artist = ?")
         params.append(artist)
+    if level:
+        where.append("level = ?")
+        params.append(level)
     if where:
         query += " WHERE " + " AND ".join(where)
     query += " ORDER BY ts DESC, id DESC LIMIT ?"

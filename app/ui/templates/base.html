@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Music Library Helper{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/base.css') }}">
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="eyebrow">▸ Music Library Helper</div>
+    <div class="name">Enrichment Console</div>
+  </div>
+  <div class="nav">
+    {% set nav_items = [
+      ('/', '◆', 'Dashboard'),
+      ('/mappings', '⚭', 'Mappings'),
+      ('/enrich', '▶', 'Enrich'),
+      ('/library', '▤', 'Library'),
+      ('/logs', '≡', 'Logs'),
+      ('/music-search', '♪', 'Music Search'),
+    ] %}
+    {% for path, icon, label in nav_items %}
+    <a class="nav-item{% if request.url.path == path %} active{% endif %}" href="{{ path }}">
+      <span class="icon">{{ icon }}</span> {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+  <div class="sidebar-footer"><span class="status-dot"></span>Container healthy — v{{ app_version | default('1.0.0') }}</div>
+</nav>
+
+<main class="main">
+  <div class="page">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

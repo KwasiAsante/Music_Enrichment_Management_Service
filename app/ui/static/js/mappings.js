@@ -1,0 +1,202 @@
+/**
+ * Mappings page — search/set/skip against /api/v1/mapping/*, plus an
+ * artist filter (debounced) against GET /api/v1/mapping/unmapped.
+ *
+ * One initRow() call per .result-card. Search replaces that row's action
+ * buttons with a result (badge + input + Set/Skip); Set/Skip both funnel
+ * into setMapping(), which PUTs the mapping and removes the row on success.
+ *
+ * Everything renders into #results-container (list or empty-state) so
+ * re-renders — from a filter change or the list emptying out — always
+ * target the same stable element instead of replacing it out from under
+ * itself.
+ */
+
+const DEBOUNCE_MS = 350;
+let debounceTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.result-card[data-mb-id]').forEach(initRow);
+
+  document.getElementById('filter-artist')?.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => loadUnmapped(e.target.value.trim()), DEBOUNCE_MS);
+  });
+});
+
+async function loadUnmapped(artist) {
+  const container = document.getElementById('results-container');
+  const params = new URLSearchParams();
+  if (artist) params.set('artist', artist);
+
+  try {
+    const res = await fetch(`/api/v1/mapping/unmapped?${params}`);
+    if (!res.ok) throw new Error(`load failed (HTTP ${res.status})`);
+    const rows = await res.json();
+    renderResults(rows);
+  } catch (err) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">⚠</div>${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderResults(rows) {
+  const container = document.getElementById('results-container');
+  document.querySelectorAll('.js-unmapped-count').forEach((el) => (el.textContent = rows.length));
+
+  if (rows.length === 0) {
+    container.innerHTML =
+      `<div class="empty"><div class="empty-icon">✓</div>` +
+      `Nothing unmapped — every album has a VGMDB association.</div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="results">${rows.map(renderRow).join('')}</div>`;
+  container.querySelectorAll('.result-card[data-mb-id]').forEach(initRow);
+}
+
+function renderRow(item) {
+  return `
+    <div class="result-card"
+         data-mb-id="${escapeHtml(item.mb_release_id || '')}"
+         data-artist="${escapeHtml(item.artist)}"
+         data-album="${escapeHtml(item.album)}"
+         data-folder="${escapeHtml(item.folder)}">
+      <div class="info">
+        <div class="info-title">${escapeHtml(item.artist)} — ${escapeHtml(item.album)}</div>
+        <div class="info-meta js-meta">
+          <span class="badge badge-yellow">unmapped</span>
+          <span>mb: ${escapeHtml(item.mb_release_id || 'none')}</span>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn-ghost btn-sm js-search" type="button">Search VGMDB</button>
+        <button class="btn btn-danger-ghost btn-sm js-skip" type="button">Skip</button>
+      </div>
+    </div>
+  `;
+}
+
+function initRow(row) {
+  const ctx = {
+    mbId: row.dataset.mbId,
+    artist: row.dataset.artist,
+    album: row.dataset.album,
+    folder: row.dataset.folder,
+  };
+
+  row.querySelector('.js-search')?.addEventListener('click', () => runSearch(row, ctx));
+  row.querySelector('.js-skip')?.addEventListener('click', () => setMapping(row, { ...ctx, vgmdbId: 'skip' }));
+}
+
+async function runSearch(row, ctx) {
+  const searchBtn = row.querySelector('.js-search');
+  const metaEl = row.querySelector('.js-meta');
+
+  searchBtn.disabled = true;
+  searchBtn.textContent = 'Searching…';
+
+  try {
+    const res = await fetch('/api/v1/mapping/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mb_release_id: ctx.mbId || null,
+        album: ctx.album,
+        artist: ctx.artist,
+        folder: ctx.folder || null,
+      }),
+    });
+    if (!res.ok) throw new Error(`search failed (HTTP ${res.status})`);
+    const data = await res.json();
+    renderSearchResult(row, data, ctx);
+  } catch (err) {
+    metaEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+    searchBtn.disabled = false;
+    searchBtn.textContent = 'Search VGMDB';
+  }
+}
+
+function renderSearchResult(row, data, ctx) {
+  const metaEl = row.querySelector('.js-meta');
+  const actionsEl = row.querySelector('.row-actions');
+
+  // A direct MB→VGMDB relationship is the strongest signal; a "suggested"
+  // hint from the catalog/barcode/title pipeline is next-best. Otherwise
+  // fall back to showing how many raw hints came back so the person knows
+  // there's something to look through instead of a flat "no match".
+  const best = data.suggested
+    ? data.suggested
+    : data.mb_vgmdb_id
+      ? { vgmdb_id: data.mb_vgmdb_id, title: '(direct MusicBrainz → VGMDB link)' }
+      : null;
+
+  const hintCount = data.catalog_hints.length + data.barcode_hints.length + data.title_hints.length;
+
+  if (best) {
+    metaEl.innerHTML =
+      `<span class="badge badge-blue">match found</span> ` +
+      `<span>vgmdb:${escapeHtml(best.vgmdb_id)} — "${escapeHtml(best.title)}"</span>`;
+  } else if (hintCount > 0) {
+    metaEl.innerHTML =
+      `<span class="badge badge-purple">${hintCount} hint${hintCount === 1 ? '' : 's'}</span> ` +
+      `<span>no auto match — enter a vgmdb id manually</span>`;
+  } else {
+    metaEl.innerHTML = `<span class="badge badge-yellow">no match</span>`;
+  }
+
+  actionsEl.innerHTML = `
+    <input type="text" class="js-vgmdb-input" placeholder="vgmdb id" value="${best ? escapeHtml(best.vgmdb_id) : ''}">
+    <button class="btn btn-success btn-sm js-set" type="button">Set</button>
+    <button class="btn btn-danger-ghost btn-sm js-skip" type="button">Skip</button>
+  `;
+
+  actionsEl.querySelector('.js-set').addEventListener('click', () => {
+    const value = actionsEl.querySelector('.js-vgmdb-input').value.trim();
+    if (!value) return;
+    setMapping(row, { ...ctx, vgmdbId: value });
+  });
+  actionsEl.querySelector('.js-skip').addEventListener('click', () => setMapping(row, { ...ctx, vgmdbId: 'skip' }));
+}
+
+async function setMapping(row, ctx) {
+  const actionsEl = row.querySelector('.row-actions');
+  actionsEl.querySelectorAll('button').forEach((b) => (b.disabled = true));
+
+  try {
+    const res = await fetch(`/api/v1/mapping/${encodeURIComponent(ctx.mbId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vgmdb_id: ctx.vgmdbId,
+        artist: ctx.artist,
+        album: ctx.album,
+        folder: ctx.folder,
+        source: 'manual',
+      }),
+    });
+    if (!res.ok) throw new Error(`set failed (HTTP ${res.status})`);
+    row.remove();
+    updateUnmappedCount();
+  } catch (err) {
+    actionsEl.querySelectorAll('button').forEach((b) => (b.disabled = false));
+    row.querySelector('.js-meta').innerHTML =
+      `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function updateUnmappedCount() {
+  const remaining = document.querySelectorAll('.result-card[data-mb-id]').length;
+  document.querySelectorAll('.js-unmapped-count').forEach((el) => (el.textContent = remaining));
+
+  if (remaining === 0) {
+    document.getElementById('results-container').innerHTML =
+      `<div class="empty"><div class="empty-icon">✓</div>` +
+      `Nothing unmapped — every album has a VGMDB association.</div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}

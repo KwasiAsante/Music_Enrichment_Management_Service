@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Mappings — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ VGMDB Mapping</div>
+    <h1>Mappings</h1>
+    <p class="page-sub"><span class="js-unmapped-count">{{ unmapped | length }}</span> unmapped album{{ '' if (unmapped | length) == 1 else 's' }}</p>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <div class="cf" style="flex:1">
+    <label>Artist</label>
+    <input type="text" id="filter-artist" placeholder="Filter by artist...">
+  </div>
+</div>
+
+<section>
+  <div class="section-label">Unmapped Albums (<span class="js-unmapped-count">{{ unmapped | length }}</span>)</div>
+  <div id="results-container">
+    {% if unmapped %}
+    <div class="results">
+      {% for item in unmapped %}
+      <div class="result-card"
+           data-mb-id="{{ item.mb_release_id or '' }}"
+           data-artist="{{ item.artist }}"
+           data-album="{{ item.album }}"
+           data-folder="{{ item.folder }}">
+        <div class="info">
+          <div class="info-title">{{ item.artist }} — {{ item.album }}</div>
+          <div class="info-meta js-meta">
+            <span class="badge badge-yellow">unmapped</span>
+            <span>mb: {{ item.mb_release_id or "none" }}</span>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm js-search" type="button">Search VGMDB</button>
+          <button class="btn btn-danger-ghost btn-sm js-skip" type="button">Skip</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">✓</div>
+      Nothing unmapped — every album has a VGMDB association.
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/mappings.js') }}" defer></script>
+{% endblock %}

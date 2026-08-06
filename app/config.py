@@ -52,10 +52,24 @@ class Settings(BaseSettings):
     qbit_save_path: str = "/downloads/servarr-downloads"
 
     # ── VGMDB ───────────────────────────────────────────────────────────────
-    vgmdb_url: str = "http://192.168.2.172:8008"
+    vgmdb_url: str = "http://192.168.2.130:8008"
+
+    # ── Web UI login (Phase 2) ──────────────────────────────────────────────
+    # HTTP Basic Auth on the browser-facing pages only (app.ui.router) — the
+    # REST API under /api/v1/* stays open so lidarr-scripts/on_album_download.py
+    # (which runs on the Lidarr host, not a browser) keeps working with no
+    # changes. See app/ui/auth.py.
+    web_ui_user: str = "admin"
+    web_ui_pass: str = Field(default="PLACEHOLDER_ME")
+    # Dev-only escape hatch: some embedded browser webviews (e.g. Cursor's
+    # built-in browser) don't render the native Basic Auth popup a
+    # WWW-Authenticate challenge triggers, so there's no way to type
+    # credentials in. Set to skip auth entirely for local dev — never set
+    # this in a real deployment. See app/ui/auth.py.
+    disable_web_ui_auth: bool = False
 
     # ── MusicBrainz ─────────────────────────────────────────────────────────
-    mb_user_agent: str = "LidarrHelper/1.0 (you@example.com)"
+    mb_user_agent: str = "MusicLibHelper/1.0 (you@example.com)"
 
     # ── Discord webhooks ────────────────────────────────────────────────────
     discord_webhook_artist: str = ""
@@ -117,6 +131,7 @@ class Settings(BaseSettings):
             "qbit_pass": self.qbit_pass,
             "github_token": self.github_token,
             "gist_id": self.gist_id,
+            "web_ui_pass": self.web_ui_pass,
         }
         return [k for k, v in candidates.items() if v == "PLACEHOLDER_ME"]
 

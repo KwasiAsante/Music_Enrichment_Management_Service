@@ -1,0 +1,58 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "FastAPI: music_enrich_manage_service",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "/Users/kasante/.asdf/installs/python/3.12.3/bin/python3",
+            "module": "uvicorn",
+            "args": [
+                "app.main:app",
+                "--reload",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8900"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "APP_DATA_DIR": "${workspaceFolder}/data/local",
+                "APP_MUSIC_DIR": "${workspaceFolder}/data/local/music",
+                "WEB_UI_USER": "admin",
+                "WEB_UI_PASS": "testpass123",
+                "DISABLE_WEB_UI_AUTH": "true"
+            },
+            "jinja": true,
+            "justMyCode": true
+        },
+        {
+            "name": "FastAPI with Auth: music_enrich_manage_service",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "/Users/kasante/.asdf/installs/python/3.12.3/bin/python3",
+            "module": "uvicorn",
+            "args": [
+                "app.main:app",
+                "--reload",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8900"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "APP_DATA_DIR": "${workspaceFolder}/data/local",
+                "APP_MUSIC_DIR": "${workspaceFolder}/data/local/music",
+                "WEB_UI_USER": "admin",
+                "WEB_UI_PASS": "testpass123",
+                "DISABLE_WEB_UI_AUTH": "false"
+            },
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}

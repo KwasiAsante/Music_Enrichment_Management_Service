@@ -1,0 +1,165 @@
+"""``/`` and friends — the Phase 2 web UI.
+
+Six page routes, all ``GET``, all rendering server-side templates via the
+shared :data:`app.ui.templates.templates` instance, and all behind HTTP
+Basic Auth (see :func:`app.ui.auth.require_login`, applied once via
+``dependencies=`` on the router below rather than per-route). No prefix —
+these are top-level paths so they read naturally in a browser
+(``/mappings``, not ``/ui/mappings``).
+
+* ``GET /``          — Dashboard. Real data: :func:`library_stats` +
+                        recent activity from the ``activity_log`` table.
+* ``GET /mappings``  — Real data: :meth:`VGMDBMapper.list_unmapped`. Search/
+                        Set/Skip wired live via ``static/js/mappings.js``.
+* ``GET /enrich``    — Real data: recent ``enrich``-category activity.
+                        Run form + live job polling via
+                        ``static/js/enrich.js``.
+* ``GET /library``   — Real data: :func:`app.api.library.list_albums`
+                        (page 1, default filters), reused directly so the
+                        page and the API never define pagination twice.
+                        Filtering/pagination live via ``static/js/library.js``.
+* ``GET /logs``      — Real data: :func:`app.api.logs.list_logs` (first
+                        100 rows, unfiltered). Filtering lives via
+                        ``static/js/logs.js``.
+* ``GET /music-search`` — The MusicBrainz → Lidarr → Prowlarr/Nyaa →
+                        qBittorrent SPA, now a real template extending
+                        ``base.html`` instead of a standalone static file
+                        served by ``app.api.proxy``. Only non-secret
+                        context (``qbit_save_path``) is passed in — the
+                        page no longer carries any API keys or passwords;
+                        see ``app.api.proxy`` for where those moved.
+
+Each handler passes ``request`` in the template context — required by
+Jinja2Templates, and also what ``base.html`` uses to compute which sidebar
+nav item gets the ``active`` class.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
+
+from app.api import library as library_api
+from app.api import logs as logs_api
+from app.config import settings
+from app.core.vgmdb_mapper import VGMDBMapper
+from app.storage import db
+from app.storage.json_store import store
+from app.ui.auth import require_login
+from app.ui.templates import templates
+
+log = logging.getLogger("music-lib-helper.ui")
+
+router = APIRouter(tags=["ui"], dependencies=[Depends(require_login)])
+
+
+# ── shared helpers ───────────────────────────────────────────────────────────
+def _has_vgmdb_association(mb_release_id: str | None, mapping: dict) -> bool:
+    """Same rule the library API uses — kept local to avoid a cross-router
+    import for one four-line function. If this drifts, promote it to a
+    shared module."""
+    if not mb_release_id:
+        return False
+    if mb_release_id in mapping:
+        return True
+    return mb_release_id.startswith("vgmdb-")
+
+
+def _library_stats() -> dict:
+    """Same computation as ``GET /api/v1/library/stats``, called directly
+    rather than over HTTP since the UI and the API share one process."""
+    album_list = store.album_list.read()
+    mapping = store.vgmdb_mapping.read()
+    enriched = store.enriched_set()
+    skipped = store.skipped_albums.read()
+
+    total = len(album_list)
+    with_mb = 0
+    enriched_count = 0
+    unmapped_count = 0
+
+    for info in album_list.values():
+        mb_id = info.get("mb_release_id")
+        if mb_id:
+            with_mb += 1
+            if mb_id in enriched:
+                enriched_count += 1
+        if not _has_vgmdb_association(mb_id, mapping):
+            unmapped_count += 1
+
+    return {
+        "total": total,
+        "enriched": enriched_count,
+        "unmapped": unmapped_count,
+        "skipped": len(skipped),
+        "with_mb_id": with_mb,
+        "without_mb_id": total - with_mb,
+    }
+
+
+# ── GET / ────────────────────────────────────────────────────────────────────
+@router.get("/", response_class=HTMLResponse)
+def dashboard(request: Request) -> HTMLResponse:
+    stats = _library_stats()
+    activity = db.list_activity(limit=15)
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {"stats": stats, "activity": activity, "categories": logs_api.KNOWN_CATEGORIES},
+    )
+
+
+# ── GET /mappings ────────────────────────────────────────────────────────────
+@router.get("/mappings", response_class=HTMLResponse)
+def mappings(request: Request) -> HTMLResponse:
+    unmapped = VGMDBMapper().list_unmapped(artist_filter=None, skip_western=True)
+    return templates.TemplateResponse(
+        request,
+        "mappings.html",
+        {"unmapped": unmapped},
+    )
+
+
+# ── GET /enrich ──────────────────────────────────────────────────────────────
+@router.get("/enrich", response_class=HTMLResponse)
+def enrich_page(request: Request) -> HTMLResponse:
+    activity = db.list_activity(limit=20, category="enrich")
+    return templates.TemplateResponse(
+        request,
+        "enrich.html",
+        {"activity": activity},
+    )
+
+
+# ── GET /library ─────────────────────────────────────────────────────────────
+@router.get("/library", response_class=HTMLResponse)
+def library_page(request: Request) -> HTMLResponse:
+    page = library_api.list_albums(artist=None, unmapped=False, page=1, limit=50)
+    return templates.TemplateResponse(
+        request,
+        "library.html",
+        {"page": page},
+    )
+
+
+# ── GET /logs ────────────────────────────────────────────────────────────────
+@router.get("/logs", response_class=HTMLResponse)
+def logs_page(request: Request) -> HTMLResponse:
+    rows = logs_api.list_logs(limit=100, category=None, level=None, artist=None)
+    return templates.TemplateResponse(
+        request,
+        "logs.html",
+        {"rows": rows, "categories": logs_api.KNOWN_CATEGORIES},
+    )
+
+
+# ── GET /music-search ──────────────────────────────────────────────────────
+@router.get("/music-search", response_class=HTMLResponse)
+def music_search_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "music_search.html",
+        {"qbit_save_path": settings.qbit_save_path},
+    )

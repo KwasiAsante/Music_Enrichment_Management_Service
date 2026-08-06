@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Logs — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Activity</div>
+    <h1>Logs</h1>
+    <p class="page-sub">Last <span id="log-count">{{ rows | length }}</span> entries</p>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <div class="cf">
+    <label>Category</label>
+    <select id="filter-category">
+      <option value="">All</option>
+      {% for c in categories %}
+      <option value="{{ c }}">{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="cf">
+    <label>Level</label>
+    <select id="filter-level">
+      <option value="">All</option>
+      <option value="info">info</option>
+      <option value="warning">warning</option>
+      <option value="error">error</option>
+    </select>
+  </div>
+  <div class="cf" style="flex:1">
+    <label>Artist</label>
+    <input type="text" id="filter-artist" placeholder="Exact artist name...">
+  </div>
+  <button class="btn btn-ghost" type="button" id="refresh-btn">Refresh</button>
+</div>
+
+<section>
+  <div class="section-label">Activity Log</div>
+  <div class="log" id="log-view" style="max-height:520px;">
+    {% for item in rows %}
+    <div class="log-line">
+      <span class="lt">{{ item.ts }}</span>
+      <span class="{{ 'lerr' if item.level == 'error' else 'lwarn' if item.level == 'warning' else 'linfo' }}">
+        [{{ item.category }}]
+        {%- if item.artist %} {{ item.artist }}{% if item.album %} — {{ item.album }}{% endif %}:{% endif %}
+        {{ item.message }}
+      </span>
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">🗒</div>
+      No activity recorded yet.
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/logs.js') }}" defer></script>
+{% endblock %}

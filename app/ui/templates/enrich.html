@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Enrich — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Enrichment</div>
+    <h1>Enrich</h1>
+    <p class="page-sub">Run bulk enrichment against your library, or check recent activity below.</p>
+  </div>
+</div>
+
+<section>
+  <div class="section-label">Run Enrichment</div>
+  <div class="result-card" style="align-items:flex-start; flex-direction:column; gap:14px;">
+    <div class="filter-bar" style="margin-bottom:0; width:100%;">
+      <div class="cf">
+        <label>Artist filter</label>
+        <input type="text" id="filter-artist" placeholder="comma-separated, blank = all">
+      </div>
+      <div class="cf">
+        <label>Album filter</label>
+        <input type="text" id="filter-album" placeholder="comma-separated, blank = all">
+      </div>
+      <div class="cf">
+        <label>Redo (specific albums)</label>
+        <input type="text" id="filter-redo" placeholder="comma-separated album names">
+      </div>
+      <div class="cf" style="min-width:auto; display:flex; align-items:center; gap:6px; padding-bottom:8px;">
+        <input type="checkbox" id="redo-skipped" style="width:auto;">
+        <label style="margin:0;">Redo skipped</label>
+      </div>
+      <div class="cf" style="min-width:auto; display:flex; align-items:center; gap:6px; padding-bottom:8px;">
+        <input type="checkbox" id="dry-run" style="width:auto;">
+        <label style="margin:0;">Dry run</label>
+      </div>
+      <button class="btn btn-primary" type="button" id="run-btn">Start Enrichment Run</button>
+    </div>
+
+    <div id="run-status" style="display:none; width:100%;">
+      <div class="info-meta" style="justify-content:space-between; display:flex;">
+        <span id="run-badge" class="badge badge-blue">queued</span>
+        <span id="run-progress-text">0 / 0</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="run-progress-fill" style="width:0%;"></div>
+      </div>
+      <div class="log" id="run-log"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-label">Recent Enrich Activity</div>
+  <div class="results" id="recent-activity-list">
+    {% if activity %}
+      {% for item in activity %}
+      <div class="result-card">
+        <div class="info">
+          <div class="info-title">
+            {%- if item.artist %}{{ item.artist }}{% if item.album %} — {{ item.album }}{% endif %}
+            {%- else %}enrichment{% endif -%}
+          </div>
+          <div class="info-meta">
+            <span class="badge
+              {%- if item.level == 'error' %} badge-red
+              {%- elif item.level == 'warning' %} badge-yellow
+              {%- else %} badge-green{% endif %}">{{ item.level }}</span>
+            <span>{{ item.message }}</span>
+          </div>
+        </div>
+        <div class="info-meta">{{ item.ts }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">
+        <div class="empty-icon">🗒</div>
+        No enrichment activity yet — run one above to see it here.
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/enrich.js') }}" defer></script>
+{% endblock %}

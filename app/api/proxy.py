@@ -1,45 +1,69 @@
-"""Reverse proxy + music-search.html host.
+"""Reverse proxy to Prowlarr, Lidarr, and qBittorrent.
 
-Three things, all on the same FastAPI app so we keep the "single
-port, single container" promise from the plan:
+Three routes, all on the same FastAPI app so we keep the "single port,
+single container" promise from the plan:
 
 * ``/proxy/prowlarr/{path}`` → forwards to ``PROWLARR_URL``
 * ``/proxy/lidarr/{path}``   → forwards to ``LIDARR_URL``
 * ``/proxy/qbit/{path}``     → forwards to ``QBIT_URL``
 
 The proxy passes through cookies (so qBittorrent's ``SID`` auth cookie
-survives), API keys (``X-Api-Key`` for the Prowlarr/Lidarr REST APIs),
-content-type, and the request body. Responses come back with the
-upstream status code and a curated set of headers (``Content-Type``,
+survives), content-type, and the request body. Responses come back with
+the upstream status code and a curated set of headers (``Content-Type``,
 ``Content-Disposition``, ``Set-Cookie``).
 
-CORS is permissive (``Access-Control-Allow-Origin: *``) so the
-music-search SPA can hit these endpoints from anywhere — the original
-``proxy.py`` did the same. This service is intended for private,
-LAN-side deployment; lock down with Caddy if exposing to the public
-internet.
+**Credentials never live in the browser.** The Prowlarr/Lidarr routes strip
+any client-supplied ``apikey`` query param and inject the real one from
+``settings`` before forwarding — the music-search page (served from
+``app.ui.router``, Phase 2) sends no key at all. The qBittorrent login path
+is special-cased the same way: whatever the client posts to
+``/proxy/qbit/api/v2/auth/login`` is ignored, and the proxy always logs in
+with ``settings.qbit_user``/``settings.qbit_pass`` instead. This used to be
+the other way around — real keys and a real password shipped as default
+values in the static ``music-search.html`` file, readable via view-source
+by anyone with network access to the page. Since every one of these
+secrets already had a proper ``Settings`` field (see ``app/config.py``),
+routing them server-side here closes that gap without adding new config.
 
-The ``GET /music-search`` route serves the SPA's HTML from
-``app/ui/static/music-search.html``. Drop your existing file there
-before building the image (or mount it at runtime). When the file is
-missing the route returns a 404 with a clear message instead of an
-opaque internal error.
+**This router is now behind the same login as the web UI** (see
+``dependencies=`` below, reusing :func:`app.ui.auth.require_login`).
+Originally these routes were left open — the reasoning was "``/api/v1/*``
+stays open for the Lidarr webhook, so `/proxy/*` can too" — but on
+reflection ``/proxy/*`` is *only* ever called from the browser (Music
+Search's JS), never server-to-server the way ``/api/v1/enrich/album`` is.
+Leaving it open meant someone could skip the login page entirely and add
+torrents straight through ``/proxy/qbit/...``, which defeats the point of
+gating the page in front of it. ``/api/v1/*`` and ``/health`` remain open —
+those genuinely are called without a browser (see ``app/ui/auth.py``).
+
+Because this only matters for same-origin calls (the page and these routes
+share one FastAPI app now), the browser reuses the Basic Auth credentials
+it already cached from loading ``/music-search`` — no changes needed in
+``music-search.js``. The ``OPTIONS`` short-circuit below now also requires
+auth as a side effect of the router-level dependency; that's fine for a
+same-origin deployment and only mattered when this proxy was reachable
+cross-origin, which it no longer is.
+
+CORS is permissive (``Access-Control-Allow-Origin: *``) so these endpoints
+are reachable the same way the original standalone ``proxy.py`` allowed.
+This service is intended for private, LAN-side deployment; lock down with
+Caddy if exposing to the public internet.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from urllib.parse import parse_qsl, quote, urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.config import settings
+from app.ui.auth import require_login
 
-log = logging.getLogger("lidarr-helper.proxy")
+log = logging.getLogger("music-lib-helper.proxy")
 
-router = APIRouter(tags=["proxy"])
+router = APIRouter(tags=["proxy"], dependencies=[Depends(require_login)])
 
 # Headers we forward TO the upstream service. Hop-by-hop headers and
 # the Host header are deliberately not in this set.
@@ -61,20 +85,24 @@ _CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type, X-Api-Key, Cookie",
 }
 
-# Where /music-search reads its index from. Static so the build step
-# can bake it in; runtime users can mount a different file over it.
-_STATIC_DIR = Path(__file__).resolve().parents[1] / "ui" / "static"
-_MUSIC_SEARCH_HTML = _STATIC_DIR / "music-search.html"
-
 
 # ── core: one request forwarder ────────────────────────────────────────────
-async def _forward(request: Request, target_url: str) -> Response:
-    """Forward ``request`` to ``target_url`` and return the upstream's response."""
+async def _forward(
+    request: Request,
+    target_url: str,
+    override_body: bytes | None = None,
+) -> Response:
+    """Forward ``request`` to ``target_url`` and return the upstream's response.
+
+    ``override_body``, when given, replaces the request's own body entirely
+    — used by the qBittorrent login special-case below so the real password
+    never needs to be read from (or exist in) the browser.
+    """
     headers = {
         k: v for k, v in request.headers.items()
         if k.lower() in _FORWARD_REQUEST_HEADERS
     }
-    body = await request.body()
+    body = override_body if override_body is not None else await request.body()
 
     try:
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
@@ -106,6 +134,22 @@ def _join(base: str, path: str, qs: str) -> str:
     return f"{url}?{qs}" if qs else url
 
 
+def _inject_apikey(query: str, api_key: str) -> str:
+    """Strip any client-supplied ``apikey`` and inject the server's real one.
+
+    Called on every Prowlarr/Lidarr request regardless of what the client
+    sent — the music-search page's own requests carry no key at all, and
+    this makes that the only thing that actually works, rather than a
+    convention the client has to honor.
+    """
+    params = [
+        (k, v) for k, v in parse_qsl(query, keep_blank_values=True)
+        if k.lower() != "apikey"
+    ]
+    params.append(("apikey", api_key))
+    return urlencode(params)
+
+
 # ── /proxy/prowlarr/* ──────────────────────────────────────────────────────
 @router.api_route(
     "/proxy/prowlarr/{path:path}",
@@ -114,7 +158,8 @@ def _join(base: str, path: str, qs: str) -> str:
 async def proxy_prowlarr(path: str, request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
-    return await _forward(request, _join(settings.prowlarr_url, path, request.url.query))
+    qs = _inject_apikey(request.url.query, settings.prowlarr_api_key)
+    return await _forward(request, _join(settings.prowlarr_url, path, qs))
 
 
 # ── /proxy/lidarr/* ────────────────────────────────────────────────────────
@@ -125,7 +170,8 @@ async def proxy_prowlarr(path: str, request: Request) -> Response:
 async def proxy_lidarr(path: str, request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
-    return await _forward(request, _join(settings.lidarr_url, path, request.url.query))
+    qs = _inject_apikey(request.url.query, settings.lidarr_api_key)
+    return await _forward(request, _join(settings.lidarr_url, path, qs))
 
 
 # ── /proxy/qbit/* ──────────────────────────────────────────────────────────
@@ -136,41 +182,17 @@ async def proxy_lidarr(path: str, request: Request) -> Response:
 async def proxy_qbit(path: str, request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
-    return await _forward(request, _join(settings.qbit_url, path, request.url.query))
 
-
-# ── /music-search (the SPA) ────────────────────────────────────────────────
-@router.get("/music-search", include_in_schema=False)
-@router.get("/music-search/", include_in_schema=False)
-async def music_search_index() -> Response:
-    if not _MUSIC_SEARCH_HTML.exists():
-        return PlainTextResponse(
-            "music-search.html is not installed. Drop your file at "
-            f"{_MUSIC_SEARCH_HTML} (relative to the project root: "
-            "app/ui/static/music-search.html) and rebuild the image.",
-            status_code=404,
-            headers=_CORS_HEADERS,
+    if request.method == "POST" and path.rstrip("/") == "api/v2/auth/login":
+        # Always log in with the server-configured account, regardless of
+        # what (if anything) the client posted here.
+        login_body = (
+            f"username={quote(settings.qbit_user)}&password={quote(settings.qbit_pass)}"
+        ).encode()
+        return await _forward(
+            request,
+            _join(settings.qbit_url, path, request.url.query),
+            override_body=login_body,
         )
-    return FileResponse(
-        _MUSIC_SEARCH_HTML,
-        media_type="text/html; charset=utf-8",
-        headers=_CORS_HEADERS,
-    )
 
-
-# Sibling static assets the SPA references (its own .js / .css).
-@router.get("/music-search/{filename}", include_in_schema=False)
-async def music_search_asset(filename: str) -> Response:
-    # Prevent path traversal — only a bare filename is allowed.
-    if "/" in filename or "\\" in filename or filename.startswith(".."):
-        raise HTTPException(status_code=404)
-    target = _STATIC_DIR / filename
-    if not target.exists() or not target.is_file():
-        raise HTTPException(status_code=404)
-    media = (
-        "application/javascript" if filename.endswith(".js")
-        else "text/css"          if filename.endswith(".css")
-        else "text/html; charset=utf-8" if filename.endswith(".html")
-        else "application/octet-stream"
-    )
-    return FileResponse(target, media_type=media, headers=_CORS_HEADERS)
+    return await _forward(request, _join(settings.qbit_url, path, request.url.query))

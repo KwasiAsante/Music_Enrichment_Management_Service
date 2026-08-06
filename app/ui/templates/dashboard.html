@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Overview</div>
+    <h1>Dashboard</h1>
+    <p class="page-sub"><span id="dash-total">{{ stats.total }}</span> albums tracked</p>
+  </div>
+  <div class="row-actions">
+    <label style="display:flex; align-items:center; gap:6px; font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); cursor:pointer;">
+      <input type="checkbox" id="scan-cleanup" style="width:auto;">
+      also remove empty folders
+    </label>
+    <button class="btn btn-ghost" type="button" id="scan-btn">Scan Library</button>
+    <button class="btn btn-ghost" type="button" id="fix-paths-btn">Fix Artist Paths</button>
+    <button class="btn btn-primary" type="button" id="enrich-btn">Run Enrichment</button>
+  </div>
+</div>
+
+<div id="dash-status" class="info-meta" style="display:none; margin-bottom:16px;"></div>
+
+<section>
+  <div class="section-label">Library Stats</div>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total">{{ stats.total }}</div>
+      <div class="stat-label">Total Albums</div>
+    </div>
+    <div class="stat-card accent-success">
+      <div class="stat-value" id="stat-enriched">{{ stats.enriched }}</div>
+      <div class="stat-label">Enriched</div>
+    </div>
+    <div class="stat-card accent-warn">
+      <div class="stat-value" id="stat-unmapped">{{ stats.unmapped }}</div>
+      <div class="stat-label">Unmapped</div>
+    </div>
+    <div class="stat-card accent-danger">
+      <div class="stat-value" id="stat-skipped">{{ stats.skipped }}</div>
+      <div class="stat-label">Skipped</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-label" style="justify-content:flex-start; gap:12px;">
+    <span>Recent Activity</span>
+    <select id="activity-filter" style="width:auto; background:var(--surface); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-family:'DM Mono',monospace; font-size:11px; padding:3px 8px;">
+      <option value="">All categories</option>
+      {% for c in categories %}
+      <option value="{{ c }}">{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="results" id="recent-activity-list">
+    {% if activity %}
+      {% for item in activity %}
+      <div class="result-card">
+        <div class="info">
+          <div class="info-title">
+            {%- if item.artist %}{{ item.artist }}{% if item.album %} — {{ item.album }}{% endif %}
+            {%- else %}{{ item.message }}{% endif -%}
+          </div>
+          <div class="info-meta">
+            <span class="badge
+              {%- if item.level == 'error' %} badge-red
+              {%- elif item.level == 'warning' %} badge-yellow
+              {%- else %} badge-green{% endif %}">{{ item.category }}</span>
+            {% if item.artist %}<span>{{ item.message }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="info-meta">{{ item.ts }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">
+        <div class="empty-icon">🗒</div>
+        No activity yet — runs will show up here once a scan or enrichment happens.
+      </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/dashboard.js') }}" defer></script>
+{% endblock %}

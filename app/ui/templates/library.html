@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Library — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Library</div>
+    <h1>Library</h1>
+    <p class="page-sub"><span id="lib-total">{{ page.total }}</span> albums</p>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <div class="cf" style="flex:1">
+    <label>Artist</label>
+    <input type="text" id="filter-artist" placeholder="Filter by artist...">
+  </div>
+  <div class="cf" style="min-width:auto; display:flex; align-items:center; gap:6px; padding-bottom:8px;">
+    <input type="checkbox" id="filter-unmapped" style="width:auto;">
+    <label style="margin:0;">Unmapped only</label>
+  </div>
+</div>
+
+<section>
+  <div class="section-label">Albums</div>
+  <div class="results" id="album-list">
+    {% for a in page.albums %}
+    <div class="result-card">
+      <div class="info">
+        <div class="info-title">{{ a.artist }} — {{ a.album }}</div>
+        <div class="info-meta">
+          <span class="badge {{ 'badge-green' if a.mapped else 'badge-yellow' }}">{{ 'mapped' if a.mapped else 'unmapped' }}</span>
+          <span>{{ a.folder }}</span>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">🗒</div>
+      No albums found — run a library scan from the Dashboard first.
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row-actions" style="justify-content:center; margin-top:16px;" id="pagination" {% if page.total <= page.limit %}style="display:none;"{% endif %}>
+    <button class="btn btn-ghost btn-sm" id="prev-page" disabled>← Prev</button>
+    <span class="info-meta" id="page-info">Page {{ page.page }} of {{ ((page.total - 1) // page.limit) + 1 if page.total else 1 }}</span>
+    <button class="btn btn-ghost btn-sm" id="next-page" {% if page.page * page.limit >= page.total %}disabled{% endif %}>Next →</button>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/library.js') }}" defer></script>
+{% endblock %}

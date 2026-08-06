@@ -17,11 +17,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__, scheduler
-from app.api import artist, enrich, library, mapping, mb, picard, proxy
+from app.api import artist, enrich, library, logs, mapping, mb, picard, proxy
 from app.config import settings
 from app.storage import db
+from app.ui import router as ui
 
 
 # ── Logging ─────────────────────────────────────────────────────────────────
@@ -29,14 +31,14 @@ logging.basicConfig(
     level=getattr(logging, settings.app_log_level.upper(), logging.INFO),
     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
 )
-log = logging.getLogger("lidarr-helper")
+log = logging.getLogger("music-lib-helper")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown hook. Runs once per process lifecycle."""
 
-    log.info("lidarr-helper v%s starting", __version__)
+    log.info("music-lib-helper v%s starting", __version__)
     log.info("data dir:  %s", settings.app_data_dir)
     log.info("music dir: %s", settings.app_music_dir)
     log.info("lidarr:    %s", settings.lidarr_url)
@@ -65,11 +67,11 @@ async def lifespan(app: FastAPI):
     yield
 
     scheduler.stop()
-    log.info("lidarr-helper shutting down")
+    log.info("music-lib-helper shutting down")
 
 
 app = FastAPI(
-    title="Lidarr Helper",
+    title="Music Library Helper",
     description=(
         "Consolidated REST API for Lidarr/Picard music library "
         "enrichment workflows."
@@ -77,6 +79,10 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+# ── static files + web UI ─────────────────────────────────────────────────────
+app.mount("/static", StaticFiles(directory="app/ui/static"), name="static")
+ui.templates.env.globals["app_version"] = __version__
 
 # ── API routers ─────────────────────────────────────────────────────────────
 app.include_router(library.router)
@@ -86,6 +92,8 @@ app.include_router(mb.router)
 app.include_router(picard.router)
 app.include_router(proxy.router)
 app.include_router(enrich.router)
+app.include_router(logs.router)
+app.include_router(ui.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -97,13 +105,3 @@ async def health() -> dict[str, object]:
         "placeholders": settings.placeholder_fields(),
     }
 
-
-@app.get("/", tags=["meta"])
-async def root() -> dict[str, str]:
-    """Tiny landing endpoint. The web UI replaces this in Phase 2."""
-    return {
-        "service": "lidarr-helper",
-        "version": __version__,
-        "docs": "/docs",
-        "health": "/health",
-    }

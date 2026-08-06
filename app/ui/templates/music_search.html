@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Music Search — Music Library Helper{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/music-search.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Music Downloader</div>
+    <h1>Find &amp; Download</h1>
+    <p class="page-sub">MusicBrainz → Lidarr → Prowlarr/Nyaa → qBittorrent</p>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <div class="cf">
+    <label>Music Save Path</label>
+    <input type="text" id="qbit-savepath" value="{{ qbit_save_path }}">
+  </div>
+  <span class="info-meta" style="align-self:center;">
+    Lidarr / Prowlarr / qBittorrent connections are configured server-side (.env) — no keys or passwords live in this page.
+  </span>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" data-tab="mb">① MusicBrainz Search</button>
+  <button class="tab" data-tab="prowlarr">② Prowlarr / Nyaa Search</button>
+</div>
+
+<!-- Tab 1: MusicBrainz -->
+<div class="tab-panel active" id="tab-mb">
+  <div class="search-row">
+    <div class="search-wrap">
+      <input type="text" id="mb-input" placeholder="Search MusicBrainz for an album or soundtrack..." autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="mb-btn">Search</button>
+  </div>
+
+  <div class="type-tabs" id="type-tabs" style="display:none">
+    <button class="type-tab active" data-type="all">All</button>
+    <button class="type-tab" data-type="Album">Albums</button>
+    <button class="type-tab" data-type="Single">Singles</button>
+    <button class="type-tab" data-type="EP">EPs</button>
+    <button class="type-tab" data-type="Soundtrack">Soundtracks</button>
+    <button class="type-tab" data-type="Compilation">Compilations</button>
+  </div>
+
+  <div id="mb-results-wrap" style="display:none">
+    <div class="section-label" id="mb-label">Results</div>
+    <div class="results" id="mb-results"></div>
+    <div id="mb-pagination" style="display:none;justify-content:center;align-items:center;gap:10px;margin-top:14px;font-family:'DM Mono',monospace;font-size:12px">
+      <button class="btn btn-ghost btn-sm" id="mb-prev-btn">← Prev</button>
+      <span id="mb-page-info" style="color:var(--muted)"></span>
+      <button class="btn btn-ghost btn-sm" id="mb-next-btn">Next →</button>
+    </div>
+  </div>
+
+  <!-- Selected album panel -->
+  <div class="sel-panel" id="sel-panel">
+    <div class="section-label">Selected Release</div>
+    <div class="sel-header">
+      <div class="sel-cover" id="sel-cover">🎵</div>
+      <div>
+        <div class="sel-title" id="sel-title">—</div>
+        <div class="sel-artist" id="sel-artist">—</div>
+        <div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap" id="sel-badges"></div>
+      </div>
+    </div>
+    <div class="opts">
+      <div class="cf">
+        <label>Quality Profile</label>
+        <select id="quality-profile">
+          <option value="2">Lossless</option>
+          <option value="1">Any</option>
+          <option value="3">Standard</option>
+        </select>
+      </div>
+      <div class="cf">
+        <label>Metadata Profile</label>
+        <select id="metadata-profile">
+          <option value="4">All</option>
+          <option value="3">Main Music Profile</option>
+          <option value="1">Standard</option>
+        </select>
+      </div>
+      <div class="cf">
+        <label>Root Folder</label>
+        <select id="root-folder">
+          <option value="/music/synced_music/Artist">/music/synced_music/Artist</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="send-row">
+      <button class="btn btn-success" id="add-lidarr-btn">▶ Add to Lidarr</button>
+      <button class="btn btn-ghost btn-sm" id="search-prowlarr-btn" style="display:none">🔍 Search Nyaa for this album</button>
+      <span class="send-status" id="add-status"></span>
+      <button class="btn btn-ghost btn-sm" id="scroll-top-btn" title="Back to search"
+        style="margin-left:auto;font-size:16px;padding:6px 12px"
+        onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+    </div>
+  </div>
+
+  <div class="log" id="mb-log"></div>
+</div>
+
+<!-- Tab 2: Prowlarr -->
+<div class="tab-panel" id="tab-prowlarr">
+  <div class="search-row">
+    <div class="search-wrap">
+      <input type="text" id="prl-input" placeholder="Search Nyaa/indexers with any query..." autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="prl-btn">Search Nyaa</button>
+  </div>
+  <p style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:12px">
+    Tip: Use show/album name only — e.g. "Panty Stocking Garterbelt Original Soundtrack FLAC"
+  </p>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">Indexers:</span>
+    <div id="indexer-filter" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="type-tab active" data-indexer-id="all">All</button>
+    </div>
+    <span id="indexer-hint" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-left:auto"></span>
+    <button class="btn btn-ghost btn-sm" id="reload-indexers-btn" style="font-size:11px;padding:4px 10px">↻ Reload</button>
+  </div>
+
+  <div id="prl-results-wrap" style="display:none">
+    <div class="section-label" id="prl-label">Results</div>
+    <div class="results" id="prl-results"></div>
+    <div id="prl-pagination" style="display:none;justify-content:center;align-items:center;gap:10px;margin-top:14px;font-family:'DM Mono',monospace;font-size:12px">
+      <button class="btn btn-ghost btn-sm" id="prl-prev-btn">← Prev</button>
+      <span id="prl-page-info" style="color:var(--muted)"></span>
+      <button class="btn btn-ghost btn-sm" id="prl-next-btn">Next →</button>
+    </div>
+  </div>
+  <div class="log" id="prl-log"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/music-search.js') }}" defer></script>
+{% endblock %}
