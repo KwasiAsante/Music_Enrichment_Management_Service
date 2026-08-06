@@ -15,9 +15,15 @@ these are top-level paths so they read naturally in a browser
                         Run form + live job polling via
                         ``static/js/enrich.js``.
 * ``GET /library``   — Real data: :func:`app.api.library.list_albums`
-                        (page 1, default filters), reused directly so the
-                        page and the API never define pagination twice.
-                        Filtering/pagination live via ``static/js/library.js``.
+                        (or :func:`app.api.library.list_skipped` when
+                        ``?view=skipped``), reused directly so the page and
+                        the API never define filtering logic twice.
+                        ``?view=`` (all/unmapped/enriched/skipped) and
+                        ``?artist=`` drive the server-rendered initial state,
+                        so links from the Dashboard's stat cards land
+                        pre-filtered rather than flashing unfiltered content.
+                        Further filtering/pagination live via
+                        ``static/js/library.js``.
 * ``GET /logs``      — Real data: :func:`app.api.logs.list_logs` (first
                         100 rows, unfiltered). Filtering lives via
                         ``static/js/logs.js``.
@@ -38,7 +44,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 
 from app.api import library as library_api
@@ -135,12 +141,30 @@ def enrich_page(request: Request) -> HTMLResponse:
 
 # ── GET /library ─────────────────────────────────────────────────────────────
 @router.get("/library", response_class=HTMLResponse)
-def library_page(request: Request) -> HTMLResponse:
-    page = library_api.list_albums(artist=None, unmapped=False, page=1, limit=50)
+def library_page(
+    request: Request,
+    view: str = Query(default="all"),
+    artist: str | None = Query(default=None),
+) -> HTMLResponse:
+    if view == "skipped":
+        skipped = library_api.list_skipped()
+        return templates.TemplateResponse(
+            request,
+            "library.html",
+            {"view": view, "artist_q": artist or "", "skipped": skipped},
+        )
+
+    page = library_api.list_albums(
+        artist=artist,
+        unmapped=(view == "unmapped"),
+        enriched=(view == "enriched"),
+        page=1,
+        limit=50,
+    )
     return templates.TemplateResponse(
         request,
         "library.html",
-        {"page": page},
+        {"view": view, "artist_q": artist or "", "page": page},
     )
 
 

@@ -22,24 +22,24 @@
 <div id="dash-status" class="info-meta" style="display:none; margin-bottom:16px;"></div>
 
 <section>
-  <div class="section-label">Library Stats</div>
+  <div class="section-label">Library Stats <span style="font-weight:400; text-transform:none; letter-spacing:normal;">— click a card for details</span></div>
   <div class="stat-grid">
-    <div class="stat-card">
+    <a class="stat-card" href="/library?view=all">
       <div class="stat-value" id="stat-total">{{ stats.total }}</div>
       <div class="stat-label">Total Albums</div>
-    </div>
-    <div class="stat-card accent-success">
+    </a>
+    <a class="stat-card accent-success" href="/library?view=enriched">
       <div class="stat-value" id="stat-enriched">{{ stats.enriched }}</div>
       <div class="stat-label">Enriched</div>
-    </div>
-    <div class="stat-card accent-warn">
+    </a>
+    <a class="stat-card accent-warn" href="/library?view=unmapped">
       <div class="stat-value" id="stat-unmapped">{{ stats.unmapped }}</div>
       <div class="stat-label">Unmapped</div>
-    </div>
-    <div class="stat-card accent-danger">
+    </a>
+    <a class="stat-card accent-danger" href="/library?view=skipped">
       <div class="stat-value" id="stat-skipped">{{ stats.skipped }}</div>
       <div class="stat-label">Skipped</div>
-    </div>
+    </a>
   </div>
 </section>
 

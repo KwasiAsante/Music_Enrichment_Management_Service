@@ -3,11 +3,13 @@
 These endpoints are the API surface over :class:`LibraryScanner` and the
 JSON storage layer:
 
-* ``POST /scan``   — rebuild album_list.json (optionally with cleanup),
-                     recording the run in the jobs table + activity log.
-* ``GET  /albums`` — browse album_list.json, paginated, with artist and
-                     unmapped filters.
-* ``GET  /stats``  — dashboard counts.
+* ``POST /scan``    — rebuild album_list.json (optionally with cleanup),
+                      recording the run in the jobs table + activity log.
+* ``GET  /albums``  — browse album_list.json, paginated, with artist,
+                      unmapped, and enriched filters.
+* ``GET  /skipped`` — browse skipped_albums.json (low-confidence VGMDB
+                      matches beets declined to auto-tag).
+* ``GET  /stats``   — dashboard counts.
 
 The scan endpoint is a *synchronous* ``def`` on purpose: FastAPI runs
 sync handlers in a threadpool, so the (blocking, IO-heavy) scan doesn't
@@ -30,6 +32,7 @@ from app.models.library import (
     LibraryStats,
     ScanRequest,
     ScanResult,
+    SkippedEntry,
 )
 from app.storage import db
 from app.storage.json_store import store
@@ -108,12 +111,22 @@ def list_albums(
         default=False,
         description="Return only albums with no VGMDB association.",
     ),
+    enriched: bool = Query(
+        default=False,
+        description="Return only albums whose mb_release_id is in the enriched log.",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> AlbumsPage:
-    """Browse ``album_list.json`` with optional filters and pagination."""
+    """Browse ``album_list.json`` with optional filters and pagination.
+
+    ``unmapped`` and ``enriched`` can combine (though in practice an
+    enriched album is never unmapped) — each is applied independently,
+    same as ``artist``.
+    """
     album_list = store.album_list.read()
     mapping = store.vgmdb_mapping.read()
+    enriched_set = store.enriched_set()
 
     artist_q = artist.lower() if artist else None
 
@@ -121,10 +134,13 @@ def list_albums(
     for folder_name, info in album_list.items():
         mb_id = info.get("mb_release_id")
         mapped = _has_vgmdb_association(mb_id, mapping)
+        is_enriched = bool(mb_id and mb_id in enriched_set)
 
         if artist_q and artist_q not in info.get("artist", "").lower():
             continue
         if unmapped and mapped:
+            continue
+        if enriched and not is_enriched:
             continue
 
         entries.append(
@@ -135,6 +151,7 @@ def list_albums(
                 mb_release_id=mb_id,
                 folder=info.get("folder", ""),
                 mapped=mapped,
+                enriched=is_enriched,
             )
         )
 
@@ -146,6 +163,23 @@ def list_albums(
     page_items = entries[start : start + limit]
 
     return AlbumsPage(total=total, page=page, limit=limit, albums=page_items)
+
+
+# ── GET /library/skipped ─────────────────────────────────────────────────────
+@router.get("/skipped", response_model=list[SkippedEntry])
+def list_skipped() -> list[SkippedEntry]:
+    """Every entry in ``skipped_albums.json`` — albums beets found a VGMDB
+    candidate for but wasn't confident enough in to tag automatically.
+
+    Distinct from ``GET /albums?unmapped=true``: unmapped means no VGMDB
+    candidate was ever found; skipped means one was found but rejected on
+    confidence. See :class:`app.models.library.SkippedEntry`.
+    """
+    skipped = store.skipped_albums.read()
+    return [
+        SkippedEntry(mb_release_id=mb_id, **entry)
+        for mb_id, entry in sorted(skipped.items(), key=lambda kv: kv[1].get("artist", "").lower())
+    ]
 
 
 # ── GET /library/stats ──────────────────────────────────────────────────────

@@ -6,30 +6,65 @@
   <div>
     <div class="eyebrow">▸ Library</div>
     <h1>Library</h1>
-    <p class="page-sub"><span id="lib-total">{{ page.total }}</span> albums</p>
+    <p class="page-sub"><span id="lib-total">{{ page.total if view != 'skipped' else skipped|length }}</span> {{ 'skipped' if view == 'skipped' else '' }} albums</p>
   </div>
 </div>
 
 <div class="filter-bar">
   <div class="cf" style="flex:1">
     <label>Artist</label>
-    <input type="text" id="filter-artist" placeholder="Filter by artist...">
+    <input type="text" id="filter-artist" value="{{ artist_q }}" placeholder="Filter by artist..." {% if view == 'skipped' %}disabled title="Not filterable in the Skipped view"{% endif %}>
   </div>
-  <div class="cf" style="min-width:auto; display:flex; align-items:center; gap:6px; padding-bottom:8px;">
-    <input type="checkbox" id="filter-unmapped" style="width:auto;">
-    <label style="margin:0;">Unmapped only</label>
+  <div class="cf">
+    <label>View</label>
+    <select id="filter-view">
+      <option value="all" {% if view == 'all' %}selected{% endif %}>All</option>
+      <option value="unmapped" {% if view == 'unmapped' %}selected{% endif %}>Unmapped</option>
+      <option value="enriched" {% if view == 'enriched' %}selected{% endif %}>Enriched</option>
+      <option value="skipped" {% if view == 'skipped' %}selected{% endif %}>Skipped</option>
+    </select>
   </div>
 </div>
 
 <section>
-  <div class="section-label">Albums</div>
+  <div class="section-label">
+    <span id="section-label-text">{{ 'Skipped (low-confidence matches)' if view == 'skipped' else 'Albums' }}</span>
+  </div>
+
+  {% if view == 'skipped' %}
+  <div class="results" id="album-list">
+    {% for s in skipped %}
+    <div class="result-card">
+      <div class="info">
+        <div class="info-title">{{ s.artist }} — {{ s.album }}</div>
+        <div class="info-meta">
+          <span class="badge badge-purple">skipped: {{ s.skipped_reason }}</span>
+          <span>match {{ s.match_percentage }} (threshold {{ s.threshold }})</span>
+          <span>vgmdb:{{ s.vgmdb_id }}</span>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">✓</div>
+      Nothing skipped — every confident VGMDB match has been tagged.
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
   <div class="results" id="album-list">
     {% for a in page.albums %}
     <div class="result-card">
       <div class="info">
         <div class="info-title">{{ a.artist }} — {{ a.album }}</div>
         <div class="info-meta">
-          <span class="badge {{ 'badge-green' if a.mapped else 'badge-yellow' }}">{{ 'mapped' if a.mapped else 'unmapped' }}</span>
+          {% if a.enriched %}
+          <span class="badge badge-green">enriched</span>
+          {% elif a.mapped %}
+          <span class="badge badge-blue">mapped</span>
+          {% else %}
+          <span class="badge badge-yellow">unmapped</span>
+          {% endif %}
           <span>{{ a.folder }}</span>
         </div>
       </div>
@@ -47,6 +82,7 @@
     <span class="info-meta" id="page-info">Page {{ page.page }} of {{ ((page.total - 1) // page.limit) + 1 if page.total else 1 }}</span>
     <button class="btn btn-ghost btn-sm" id="next-page" {% if page.page * page.limit >= page.total %}disabled{% endif %}>Next →</button>
   </div>
+  {% endif %}
 </section>
 {% endblock %}
 

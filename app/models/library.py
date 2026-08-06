@@ -68,7 +68,8 @@ class ScanResult(BaseModel):
 
 # ── GET /library/albums ─────────────────────────────────────────────────────
 class AlbumEntry(BaseModel):
-    """One album from ``album_list.json``, plus a derived ``mapped`` flag."""
+    """One album from ``album_list.json``, plus derived ``mapped``/``enriched``
+    flags."""
 
     folder_name: str = Field(description="The album-list key (the album folder name).")
     artist: str
@@ -80,6 +81,9 @@ class AlbumEntry(BaseModel):
         "entry in vgmdb_mapping.json or an mb_release_id that is itself a "
         "'vgmdb-' id.",
     )
+    enriched: bool = Field(
+        description="True if this album's mb_release_id is in the enriched log.",
+    )
 
 
 class AlbumsPage(BaseModel):
@@ -89,6 +93,25 @@ class AlbumsPage(BaseModel):
     page: int
     limit: int
     albums: list[AlbumEntry]
+
+
+# ── GET /library/skipped ────────────────────────────────────────────────────
+class SkippedEntry(BaseModel):
+    """One entry from ``skipped_albums.json`` — an album the beets enrichment
+    pass found a VGMDB candidate for, but whose match confidence fell below
+    threshold, so it was left un-tagged rather than guessed at. Distinct from
+    ``mapped=False`` ("no VGMDB candidate was ever found") — a skipped album
+    usually *does* have a mapping, just one beets wasn't confident enough to
+    act on automatically."""
+
+    mb_release_id: str = Field(description="The skipped_albums.json key.")
+    vgmdb_id: str
+    folder: str
+    artist: str
+    album: str
+    match_percentage: str
+    threshold: str
+    skipped_reason: str
 
 
 # ── GET /library/stats ──────────────────────────────────────────────────────
