@@ -22,7 +22,57 @@ document.addEventListener('DOMContentLoaded', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => loadUnmapped(e.target.value.trim()), DEBOUNCE_MS);
   });
+
+  document.getElementById('import-form')?.addEventListener('submit', handleImportSubmit);
 });
+
+// ── Backup & restore ─────────────────────────────────────────────────────
+async function handleImportSubmit(e) {
+  e.preventDefault();
+  const fileInput = document.getElementById('import-file');
+  const mode = document.getElementById('import-mode').value;
+  const resultEl = document.getElementById('import-result');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  if (mode === 'replace' &&
+      !confirm('This replaces the entire mapping with the contents of the ' +
+               'file — any entry not in it will be removed. Continue?')) {
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Importing…';
+  resultEl.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`/api/v1/mapping/import?mode=${encodeURIComponent(mode)}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `import failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML =
+      `<span class="badge badge-green">done</span> ` +
+      `<span>+${data.added} added, ${data.updated} updated` +
+      (data.mode === 'replace' ? `, ${data.removed} removed` : '') +
+      (data.skipped_invalid ? `, ${data.skipped_invalid} skipped (invalid)` : '') +
+      ` — ${data.total_after} total</span>`;
+
+    e.target.reset();
+    await loadUnmapped(document.getElementById('filter-artist')?.value.trim() || '');
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '⇧ Import';
+  }
+}
 
 async function loadUnmapped(artist) {
   const container = document.getElementById('results-container');

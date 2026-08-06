@@ -363,3 +363,93 @@ class VGMDBMapper:
         store.vgmdb_mapping.write(mapping)
         log.info("mapping deleted: %s", mb_release_id)
         return True
+
+    # ── export / import (Phase 3 backup-restore) ───────────────────────
+    def export_mappings(self) -> dict[str, dict]:
+        """Return the raw ``vgmdb_mapping.json`` contents, keyed by
+        ``mb_release_id``. The router wraps this with export metadata."""
+        return store.vgmdb_mapping.read()
+
+    def import_mappings(
+        self,
+        incoming: dict[str, Any],
+        *,
+        mode: str = "merge",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Load mapping entries from a previously exported (or hand-edited)
+        dict and write them into ``vgmdb_mapping.json``.
+
+        ``mode``:
+
+        * ``"merge"``   — keep every existing entry; entries present in
+          ``incoming`` are added (new ``mb_release_id``) or overwrite the
+          existing value (same key, different value).
+        * ``"replace"`` — the imported file becomes the entire mapping;
+          any existing entry not present in ``incoming`` is dropped.
+
+        Rows in ``incoming`` that aren't objects, or are missing
+        ``vgmdb_id``, are silently skipped and counted in
+        ``skipped_invalid`` — a partially-hand-edited backup shouldn't
+        blow up the whole restore.
+
+        With ``dry_run``, computes and returns the same stats without
+        writing ``vgmdb_mapping.json``.
+        """
+        if mode not in ("merge", "replace"):
+            raise ValueError(f"mode must be 'merge' or 'replace', got {mode!r}")
+
+        current = store.vgmdb_mapping.read()
+
+        validated: dict[str, dict] = {}
+        skipped_invalid = 0
+        for mb_id, entry in incoming.items():
+            if not isinstance(entry, dict) or not entry.get("vgmdb_id"):
+                skipped_invalid += 1
+                continue
+            validated[mb_id] = {
+                "vgmdb_id": str(entry["vgmdb_id"]),
+                "folder":   entry.get("folder", "") or "",
+                "artist":   entry.get("artist", "") or "",
+                "album":    entry.get("album", "") or "",
+                "source":   entry.get("source", "") or "import",
+            }
+
+        added = updated = unchanged = 0
+        for mb_id, entry in validated.items():
+            if mb_id not in current:
+                added += 1
+            elif current[mb_id] != entry:
+                updated += 1
+            else:
+                unchanged += 1
+
+        if mode == "replace":
+            removed = sum(1 for k in current if k not in validated)
+            new_mapping = validated
+        else:
+            removed = 0
+            new_mapping = {**current, **validated}
+
+        if not dry_run:
+            store.vgmdb_mapping.write(new_mapping)
+            log.info(
+                "mapping import (mode=%s): +%d added, %d updated, %d removed, "
+                "%d skipped, %d total",
+                mode, added, updated, removed, skipped_invalid, len(new_mapping),
+            )
+        else:
+            log.info("mapping import (dry run, mode=%s): would be "
+                     "+%d added, %d updated, %d removed, %d skipped",
+                     mode, added, updated, removed, skipped_invalid)
+
+        return {
+            "mode":            mode,
+            "added":           added,
+            "updated":         updated,
+            "unchanged":       unchanged,
+            "removed":         removed,
+            "skipped_invalid": skipped_invalid,
+            "total_after":     len(new_mapping),
+            "dry_run":         dry_run,
+        }

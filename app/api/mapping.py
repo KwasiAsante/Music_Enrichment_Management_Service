@@ -1,6 +1,7 @@
-"""``/api/v1/mapping/*`` — VGMDB mapping list, search, set, delete.
+"""``/api/v1/mapping/*`` — VGMDB mapping list, search, set, delete,
+export/import.
 
-Five endpoints:
+Seven endpoints:
 
 * ``GET    /``                — list every entry in ``vgmdb_mapping.json``
                                 (optionally filtered by artist).
@@ -10,17 +11,23 @@ Five endpoints:
                                 Mappings page and by ad-hoc CLI workflows.
 * ``PUT    /{mb_release_id}`` — set / update a single mapping.
 * ``DELETE /{mb_release_id}`` — remove a mapping (clears it for re-mapping).
+* ``GET    /export``          — download the whole mapping as a backup file.
+* ``POST   /import``          — restore/merge mappings from a backup file.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, File, HTTPException, Path, Query, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.models.mapping import (
     DeleteMappingResult,
+    ImportMappingsResult,
     MappingEntry,
     SearchRequest,
     SearchResult,
@@ -156,3 +163,81 @@ def delete_mapping(
     if ok and not dry_run:
         db.add_activity("mapping", f"deleted mapping {mb_release_id}")
     return DeleteMappingResult(deleted=ok, dry_run=dry_run)
+
+
+# ── GET /mapping/export ─────────────────────────────────────────────────────
+@router.get("/export")
+def export_mappings() -> JSONResponse:
+    """Download the full ``vgmdb_mapping.json`` as a timestamped backup file.
+
+    The response body wraps the raw mapping with a bit of metadata
+    (``exported_at``, ``count``); ``POST /mapping/import`` accepts that
+    wrapped shape *or* a bare ``vgmdb_mapping.json`` (e.g. one copied
+    straight off the data volume), so either can be restored later.
+    """
+    mapping = VGMDBMapper().export_mappings()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "exported_at": now.isoformat(),
+        "count": len(mapping),
+        "mappings": mapping,
+    }
+    db.add_activity("mapping", f"exported {len(mapping)} mapping(s)")
+    filename = f"vgmdb_mapping-{now:%Y%m%d-%H%M%S}.json"
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── POST /mapping/import ────────────────────────────────────────────────────
+@router.post("/import", response_model=ImportMappingsResult)
+async def import_mappings(
+    file: UploadFile = File(
+        ...,
+        description="A file from GET /mapping/export, or a raw vgmdb_mapping.json.",
+    ),
+    mode: str = Query(
+        default="merge",
+        pattern="^(merge|replace)$",
+        description="'merge' adds/overwrites on top of the current mapping. "
+        "'replace' makes the imported file the entire mapping — anything "
+        "not in it is dropped.",
+    ),
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would change without writing "
+        "vgmdb_mapping.json.",
+    ),
+) -> ImportMappingsResult:
+    """Restore (or merge in) mappings from a previously exported backup."""
+    raw = await file.read()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"not valid JSON: {exc}") from exc
+
+    if isinstance(data, dict) and isinstance(data.get("mappings"), dict):
+        incoming = data["mappings"]
+    elif isinstance(data, dict):
+        incoming = data
+    else:
+        raise HTTPException(
+            400,
+            "expected a JSON object — either an export from GET "
+            "/mapping/export, or a raw vgmdb_mapping.json.",
+        )
+
+    try:
+        result = VGMDBMapper().import_mappings(incoming, mode=mode, dry_run=dry_run)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if not dry_run:
+        db.add_activity(
+            "mapping",
+            f"imported mappings (mode={mode}): +{result['added']} added, "
+            f"{result['updated']} updated, {result['removed']} removed, "
+            f"{result['skipped_invalid']} skipped",
+        )
+    return ImportMappingsResult(**result)

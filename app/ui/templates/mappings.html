@@ -10,6 +10,23 @@
   </div>
 </div>
 
+<section class="backup-panel">
+  <div class="section-label">Backup &amp; Restore</div>
+  <div class="backup-row">
+    <a class="btn btn-ghost btn-sm" href="/api/v1/mapping/export" download>⇩ Export backup</a>
+
+    <form id="import-form" class="import-form">
+      <input type="file" id="import-file" accept="application/json" required>
+      <select id="import-mode" class="cf-inline">
+        <option value="merge">Merge into existing</option>
+        <option value="replace">Replace entire mapping</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" type="submit">⇧ Import</button>
+    </form>
+  </div>
+  <div id="import-result" class="import-result"></div>
+</section>
+
 <div class="filter-bar">
   <div class="cf" style="flex:1">
     <label>Artist</label>

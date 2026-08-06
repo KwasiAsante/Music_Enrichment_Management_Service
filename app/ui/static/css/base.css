@@ -118,6 +118,17 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .cf input, .cf select { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 10px; outline: none; }
 .cf input:focus, .cf select:focus { border-color: var(--accent); }
 
+/* ── Backup & restore (Mappings page) ───────────────────────────────────── */
+
+.backup-panel { margin-bottom: 24px; }
+.backup-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.import-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.import-form input[type="file"] { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); max-width: 220px; }
+.import-form .cf-inline { background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 10px; outline: none; }
+.import-form .cf-inline:focus { border-color: var(--accent); }
+.import-result { margin-top: 10px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.import-result:empty { display: none; }
+
 /* ── Log ─────────────────────────────────────────────────────────────── */
 
 .log { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.9; max-height: 260px; overflow-y: auto; }
