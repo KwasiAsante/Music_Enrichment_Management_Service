@@ -216,7 +216,7 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
   padding: 1px 8px; font-size: 10px;
 }
 .artist-group-albums { display: flex; flex-direction: column; gap: 6px; }
-.results.grid-mode .artist-group-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.results.grid-mode .artist-group:not(.collapsed) .artist-group-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .group-truncated {
   font-family: 'DM Mono', monospace; font-size: 11px; color: var(--warn); background: rgba(251,191,36,0.1);
   border: 1px solid rgba(251,191,36,0.25); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
