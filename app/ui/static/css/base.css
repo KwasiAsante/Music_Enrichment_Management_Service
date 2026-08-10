@@ -178,9 +178,20 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .results.grid-mode {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
 }
-.results.grid-mode .result-card { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; }
+.results.grid-mode .result-card { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.results.grid-mode .result-card .info { padding: 10px 14px 14px; }
 .results.grid-mode .info-title { white-space: normal; }
 .results.grid-mode .info-meta { flex-wrap: wrap; }
+
+.album-art-wrap {
+  width: 100%; aspect-ratio: 1 / 1; background: var(--subtle); position: relative;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+.album-art-wrap::before {
+  content: '♪'; font-size: 28px; color: var(--border2); position: absolute;
+}
+.album-art { width: 100%; height: 100%; object-fit: cover; position: relative; z-index: 1; }
 
 /* ── Library: group-by-artist ───────────────────────────────────────────── */
 

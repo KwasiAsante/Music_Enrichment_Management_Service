@@ -10,6 +10,9 @@ JSON storage layer:
 * ``GET  /albums/grouped`` — the same filters, bucketed by artist instead
                       of paginated — backs the Library page's "group by
                       artist" view.
+* ``GET  /art``     — cover art for one album (folder-level image file,
+                      falling back to whatever's embedded in its first
+                      audio file). Backs the Library page's grid view.
 * ``GET  /skipped`` — browse skipped_albums.json (low-confidence VGMDB
                       matches beets declined to auto-tag).
 * ``GET  /stats``   — dashboard counts.
@@ -27,7 +30,10 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
+from app.config import settings
+from app.core.cover_art import find_cover_art
 from app.core.library_scanner import LibraryScanner
 from app.models.library import (
     AlbumEntry,
@@ -275,6 +281,43 @@ def list_albums_grouped(
 
     return GroupedAlbumsPage(
         total=total, total_artists=len(groups), truncated=truncated, groups=groups,
+    )
+
+
+# ── GET /library/art ─────────────────────────────────────────────────────
+@router.get("/art")
+def album_art(
+    folder: str = Query(
+        ...,
+        description="An AlbumEntry.folder value — a path relative to the "
+        "artist root, e.g. 'Some Artist/Some Album'.",
+    ),
+) -> Response:
+    """Cover art for one album: a folder-level cover image if present,
+    else whatever's embedded in its first audio file. 404 if neither
+    exists, so the frontend can fall back to a placeholder — this is
+    expected for a lot of albums, not an error condition.
+    """
+    # Same "artist root" convention used throughout app/core/* — see
+    # LibraryScanner, VGMDBMapper, BeetsEnricher.
+    artist_root = (settings.app_music_dir / "synced_music" / "Artist").resolve()
+    album_dir = (artist_root / folder).resolve()
+
+    if not album_dir.is_relative_to(artist_root):
+        raise HTTPException(400, "folder must resolve inside the artist root")
+
+    art = find_cover_art(album_dir)
+    if art is None:
+        raise HTTPException(404, "no cover art available")
+
+    data, mime = art
+    return Response(
+        content=data,
+        media_type=mime,
+        # Art for an existing album folder essentially never changes —
+        # safe to let the browser cache it for a day instead of
+        # re-requesting on every scroll through the grid view.
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

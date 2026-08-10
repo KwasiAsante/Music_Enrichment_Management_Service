@@ -4,9 +4,16 @@
  * Two independent axes on top of the existing "view" filter (all /
  * unmapped / enriched / skipped):
  *
- *   - Layout (list / grid) — a pure CSS toggle on the already-rendered
- *     `.result-card` markup (a `.grid-mode` class on the container), so
- *     switching it never re-fetches anything. Persisted to localStorage.
+ *   - Layout (list / grid) — re-renders the already-fetched data (see
+ *     `lastData`/`lastKind` below) with or without cover-art thumbnails;
+ *     no network request for the album list itself. Persisted to
+ *     localStorage. Grid mode's `<img>` tags each pull one image from
+ *     GET /api/v1/library/art?folder=... (a folder cover file, or
+ *     whatever's embedded in the first audio file); browsers cache those
+ *     for a day (see the endpoint's Cache-Control) and lazy-load them, so
+ *     switching to grid only fetches thumbnails actually scrolled into
+ *     view. Albums with no art just show a plain placeholder — a missing
+ *     thumbnail is expected, not an error.
  *   - Group by artist — bucket results under artist headers instead of a
  *     flat list. This DOES change the data shape (GET
  *     /api/v1/library/albums/grouped instead of /albums, unpaginated), so
@@ -39,6 +46,13 @@ const state = {
   layout: localStorage.getItem('library_layout') || 'list',
 };
 let debounceTimer = null;
+// The last successfully-loaded data + which render path it came from, so
+// the layout toggle can re-render with/without art thumbnails without a
+// network round trip. 'kind' is null until the first load — the server's
+// initial render doesn't populate this, so the very first layout toggle
+// on a fresh page load falls back to loadPage() (see setLayout()).
+let lastData = null;
+let lastKind = null; // 'albums' | 'grouped' | 'skipped'
 
 const VIEW_LABELS = {
   all: 'Albums',
@@ -48,7 +62,7 @@ const VIEW_LABELS = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  applyLayout();
+  applyLayoutButtons();
   document.getElementById('toggle-group').checked = state.groupByArtist;
 
   document.getElementById('filter-artist').addEventListener('input', (e) => {
@@ -117,20 +131,34 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPage();
   });
 
-  // The server always renders the flat/paginated view. If a saved
-  // preference wants grouping, replace it now — layout doesn't need a
-  // reload since it's CSS-only (see applyLayout()).
-  if (state.groupByArtist && state.view !== 'skipped') loadPage();
+  // The server always renders the flat/paginated view without art
+  // markup. If a saved preference wants grouping and/or grid art, do one
+  // real load now so lastData gets populated and rendering catches up.
+  if ((state.groupByArtist || state.layout === 'grid') && state.view !== 'skipped') loadPage();
 });
 
-// ── Layout (list / grid) — CSS-only, no fetch ────────────────────────────
+// ── Layout (list / grid) ──────────────────────────────────────────────────
 function setLayout(layout) {
   state.layout = layout;
   localStorage.setItem('library_layout', layout);
-  applyLayout();
+  applyLayoutButtons();
+
+  // No client-side fetch has happened yet (still showing the server's
+  // initial render) — we don't have folder paths to build art URLs from,
+  // so do one real load. After that, toggling just re-renders lastData.
+  if (lastData === null) {
+    loadPage();
+    return;
+  }
+  if (lastKind === 'albums') {
+    renderAlbums(lastData);
+  } else if (lastKind === 'grouped') {
+    renderGrouped(lastData);
+  }
+  // 'skipped' rows never show art either way — nothing to re-render.
 }
 
-function applyLayout() {
+function applyLayoutButtons() {
   const listEl = document.getElementById('album-list');
   listEl.classList.toggle('grid-mode', state.layout === 'grid');
   document.getElementById('layout-list').classList.toggle('active', state.layout === 'list');
@@ -158,6 +186,8 @@ async function loadPage() {
     const res = await fetch(`/api/v1/library/albums?${qs}`);
     if (!res.ok) throw new Error(`load failed (HTTP ${res.status})`);
     const data = await res.json();
+    lastData = data;
+    lastKind = 'albums';
     renderAlbums(data);
     renderPagination(data);
   } catch (err) {
@@ -180,6 +210,8 @@ async function loadGrouped() {
     const res = await fetch(`/api/v1/library/albums/grouped?${qs}`);
     if (!res.ok) throw new Error(`load failed (HTTP ${res.status})`);
     const data = await res.json();
+    lastData = data;
+    lastKind = 'grouped';
     renderGrouped(data);
   } catch (err) {
     listEl.innerHTML = `<div class="empty"><div class="empty-icon">⚠</div>${escapeHtml(err.message)}</div>`;
@@ -194,6 +226,8 @@ async function loadSkipped() {
     const res = await fetch('/api/v1/library/skipped');
     if (!res.ok) throw new Error(`load failed (HTTP ${res.status})`);
     const rows = await res.json();
+    lastData = rows;
+    lastKind = 'skipped';
     document.getElementById('lib-total').textContent = rows.length;
 
     if (rows.length === 0) {
@@ -257,8 +291,16 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
     badgeText = 'mapped';
   }
   const title = hideArtist ? escapeHtml(a.album) : `${escapeHtml(a.artist)} — ${escapeHtml(a.album)}`;
+  // Art only in grid mode — list mode never requests thumbnails at all.
+  const art = state.layout === 'grid' && a.folder
+    ? `<div class="album-art-wrap">` +
+      `<img class="album-art" src="/api/v1/library/art?folder=${encodeURIComponent(a.folder)}" ` +
+      `alt="" loading="lazy" decoding="async" onerror="this.remove()">` +
+      `</div>`
+    : '';
   return `
     <div class="result-card">
+      ${art}
       <div class="info">
         <div class="info-title">${title}</div>
         <div class="info-meta">
