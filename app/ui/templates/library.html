@@ -44,9 +44,15 @@
     <input type="checkbox" id="toggle-group" {% if view == 'skipped' %}disabled{% endif %}>
     Group by artist
   </label>
-  <div class="layout-toggle" role="group" aria-label="Layout">
-    <button type="button" class="layout-btn" id="layout-list" title="List view" aria-label="List view">☰</button>
-    <button type="button" class="layout-btn" id="layout-grid" title="Grid view" aria-label="Grid view">▦</button>
+  <div class="toolbar-right">
+    <div class="group-collapse-controls" id="group-collapse-controls" style="display:none;">
+      <button type="button" class="btn btn-ghost btn-sm" id="collapse-all">Collapse all</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="expand-all">Expand all</button>
+    </div>
+    <div class="layout-toggle" role="group" aria-label="Layout">
+      <button type="button" class="layout-btn" id="layout-list" title="List view" aria-label="List view">☰</button>
+      <button type="button" class="layout-btn" id="layout-grid" title="Grid view" aria-label="Grid view">▦</button>
+    </div>
   </div>
 </div>
 

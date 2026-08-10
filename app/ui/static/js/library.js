@@ -53,6 +53,11 @@ let debounceTimer = null;
 // on a fresh page load falls back to loadPage() (see setLayout()).
 let lastData = null;
 let lastKind = null; // 'albums' | 'grouped' | 'skipped'
+// Which artist groups are collapsed, by artist name. In-memory only —
+// deliberately not persisted, so it starts fresh each page load/reload
+// rather than accumulating stale entries as the artist list changes with
+// filters.
+const collapsedArtists = new Set();
 
 const VIEW_LABELS = {
   all: 'Albums',
@@ -64,6 +69,7 @@ const VIEW_LABELS = {
 document.addEventListener('DOMContentLoaded', () => {
   applyLayoutButtons();
   document.getElementById('toggle-group').checked = state.groupByArtist;
+  updateGroupControlsVisibility();
 
   document.getElementById('filter-artist').addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
@@ -107,17 +113,48 @@ document.addEventListener('DOMContentLoaded', () => {
     groupToggle.disabled = isSkipped;
 
     document.getElementById('section-label-text').textContent = VIEW_LABELS[state.view];
+    updateGroupControlsVisibility();
     loadPage();
   });
 
   document.getElementById('toggle-group').addEventListener('change', (e) => {
     state.groupByArtist = e.target.checked;
     localStorage.setItem('library_group_by_artist', state.groupByArtist ? '1' : '0');
+    updateGroupControlsVisibility();
     loadPage();
   });
 
   document.getElementById('layout-list').addEventListener('click', () => setLayout('list'));
   document.getElementById('layout-grid').addEventListener('click', () => setLayout('grid'));
+
+  document.getElementById('collapse-all').addEventListener('click', () => {
+    document.querySelectorAll('#album-list .artist-group').forEach((g) => {
+      g.classList.add('collapsed');
+      collapsedArtists.add(g.dataset.artist);
+    });
+  });
+
+  document.getElementById('expand-all').addEventListener('click', () => {
+    document.querySelectorAll('#album-list .artist-group').forEach((g) => g.classList.remove('collapsed'));
+    collapsedArtists.clear();
+  });
+
+  // Delegated on the (stable) container rather than per-header, so it
+  // keeps working across re-renders (filter changes, layout toggles)
+  // without needing to re-attach listeners each time.
+  document.getElementById('album-list').addEventListener('click', (e) => {
+    const header = e.target.closest('.artist-group-header');
+    if (!header) return;
+    toggleGroup(header.closest('.artist-group'));
+  });
+
+  document.getElementById('album-list').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const header = e.target.closest('.artist-group-header');
+    if (!header) return;
+    e.preventDefault();
+    toggleGroup(header.closest('.artist-group'));
+  });
 
   document.getElementById('prev-page').addEventListener('click', () => {
     if (state.page > 1) {
@@ -163,6 +200,23 @@ function applyLayoutButtons() {
   listEl.classList.toggle('grid-mode', state.layout === 'grid');
   document.getElementById('layout-list').classList.toggle('active', state.layout === 'list');
   document.getElementById('layout-grid').classList.toggle('active', state.layout === 'grid');
+}
+
+// ── Group-by-artist: collapse/expand ─────────────────────────────────────
+function updateGroupControlsVisibility() {
+  const show = state.groupByArtist && state.view !== 'skipped';
+  document.getElementById('group-collapse-controls').style.display = show ? 'flex' : 'none';
+}
+
+function toggleGroup(groupEl) {
+  const artist = groupEl.dataset.artist;
+  const collapsed = groupEl.classList.toggle('collapsed');
+  groupEl.querySelector('.artist-group-header').setAttribute('aria-expanded', String(!collapsed));
+  if (collapsed) {
+    collapsedArtists.add(artist);
+  } else {
+    collapsedArtists.delete(artist);
+  }
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────
@@ -258,6 +312,7 @@ function renderAlbums(data) {
 function renderGrouped(data) {
   const listEl = document.getElementById('album-list');
   document.getElementById('lib-total').textContent = data.total;
+  updateGroupControlsVisibility();
 
   if (data.groups.length === 0) {
     listEl.innerHTML = `<div class="empty"><div class="empty-icon">🗒</div>No albums match these filters.</div>`;
@@ -270,14 +325,21 @@ function renderGrouped(data) {
 
   listEl.innerHTML =
     truncatedNote +
-    data.groups.map((g) => `
-      <div class="artist-group">
-        <div class="artist-group-header">${escapeHtml(g.artist)} <span class="artist-group-count">${g.count}</span></div>
-        <div class="artist-group-albums">
-          ${g.albums.map((a) => renderAlbumRow(a, { hideArtist: true })).join('')}
+    data.groups.map((g) => {
+      const collapsed = collapsedArtists.has(g.artist);
+      return `
+        <div class="artist-group${collapsed ? ' collapsed' : ''}" data-artist="${escapeAttr(g.artist)}">
+          <div class="artist-group-header" role="button" tabindex="0" aria-expanded="${!collapsed}">
+            <span class="artist-group-chevron">▾</span>
+            ${escapeHtml(g.artist)}
+            <span class="artist-group-count">${g.count}</span>
+          </div>
+          <div class="artist-group-albums">
+            ${g.albums.map((a) => renderAlbumRow(a, { hideArtist: true })).join('')}
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 }
 
 function renderAlbumRow(a, { hideArtist = false } = {}) {
@@ -342,4 +404,8 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';
   return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

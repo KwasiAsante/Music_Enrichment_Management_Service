@@ -158,6 +158,8 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 /* ── Library: view toolbar (group-by-artist toggle + layout switch) ────── */
 
 .view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.group-collapse-controls { display: flex; gap: 6px; }
 .toggle-check {
   display: inline-flex; align-items: center; gap: 7px; font-family: 'DM Mono', monospace;
   font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
@@ -199,8 +201,16 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .artist-group-header {
   font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 700; color: var(--text);
   display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
 }
+.artist-group-header:hover { color: var(--accent); }
+.artist-group-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.artist-group-chevron {
+  display: inline-block; font-size: 10px; color: var(--muted); transition: transform 0.15s;
+  transform: rotate(0deg);
+}
+.artist-group.collapsed .artist-group-chevron { transform: rotate(-90deg); }
+.artist-group.collapsed .artist-group-albums { display: none; }
 .artist-group-count {
   font-weight: 400; color: var(--muted); background: var(--subtle); border-radius: 10px;
   padding: 1px 8px; font-size: 10px;
