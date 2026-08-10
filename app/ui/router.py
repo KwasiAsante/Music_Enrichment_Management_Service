@@ -17,16 +17,19 @@ these are top-level paths so they read naturally in a browser
 * ``GET /enrich``    — Real data: recent ``enrich``-category activity.
                         Run form + live job polling via
                         ``static/js/enrich.js``.
-* ``GET /library``   — Real data: :func:`app.api.library.list_albums`
-                        (or :func:`app.api.library.list_skipped` when
-                        ``?view=skipped``), reused directly so the page and
+* ``GET /library``   — Real data: :func:`app.api.library.list_albums`,
+                        :func:`app.api.library.list_albums_grouped` (group-
+                        by-artist view), or :func:`app.api.library.list_skipped`
+                        (``?view=skipped``), reused directly so the page and
                         the API never define filtering logic twice.
-                        ``?view=`` (all/unmapped/enriched/skipped) and
-                        ``?artist=`` drive the server-rendered initial state,
-                        so links from the Dashboard's stat cards land
-                        pre-filtered rather than flashing unfiltered content.
-                        Further filtering/pagination live via
-                        ``static/js/library.js``.
+                        ``?view=`` (all/unmapped/enriched/skipped),
+                        ``?artist=``, ``?folder=``, and ``?source=`` drive
+                        the server-rendered initial state, so links from the
+                        Dashboard's stat cards land pre-filtered rather than
+                        flashing unfiltered content. Layout (list/grid) and
+                        group-by-artist are client-only preferences (saved
+                        to localStorage) applied after load; further
+                        filtering/pagination live via ``static/js/library.js``.
 * ``GET /logs``      — Real data: :func:`app.api.logs.list_logs` (first
                         100 rows, unfiltered). Filtering lives via
                         ``static/js/logs.js``.
@@ -155,26 +158,36 @@ def library_page(
     request: Request,
     view: str = Query(default="all"),
     artist: str | None = Query(default=None),
+    folder: str | None = Query(default=None),
+    source: str | None = Query(default=None),
 ) -> HTMLResponse:
     if view == "skipped":
         skipped = library_api.list_skipped()
         return templates.TemplateResponse(
             request,
             "library.html",
-            {"view": view, "artist_q": artist or "", "skipped": skipped},
+            {
+                "view": view, "artist_q": artist or "", "folder_q": folder or "",
+                "source_q": source or "", "skipped": skipped,
+            },
         )
 
     page = library_api.list_albums(
         artist=artist,
+        folder=folder,
         unmapped=(view == "unmapped"),
         enriched=(view == "enriched"),
+        source=source,
         page=1,
         limit=50,
     )
     return templates.TemplateResponse(
         request,
         "library.html",
-        {"view": view, "artist_q": artist or "", "page": page},
+        {
+            "view": view, "artist_q": artist or "", "folder_q": folder or "",
+            "source_q": source or "", "page": page,
+        },
     )
 
 

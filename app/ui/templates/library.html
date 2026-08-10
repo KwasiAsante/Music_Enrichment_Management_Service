@@ -15,6 +15,10 @@
     <label>Artist</label>
     <input type="text" id="filter-artist" value="{{ artist_q }}" placeholder="Filter by artist..." {% if view == 'skipped' %}disabled title="Not filterable in the Skipped view"{% endif %}>
   </div>
+  <div class="cf" style="flex:1">
+    <label>Folder</label>
+    <input type="text" id="filter-folder" value="{{ folder_q }}" placeholder="Filter by folder path..." {% if view == 'skipped' %}disabled title="Not filterable in the Skipped view"{% endif %}>
+  </div>
   <div class="cf">
     <label>View</label>
     <select id="filter-view">
@@ -23,6 +27,26 @@
       <option value="enriched" {% if view == 'enriched' %}selected{% endif %}>Enriched</option>
       <option value="skipped" {% if view == 'skipped' %}selected{% endif %}>Skipped</option>
     </select>
+  </div>
+  <div class="cf">
+    <label>Mapped via</label>
+    <select id="filter-source" {% if view == 'skipped' %}disabled title="Not filterable in the Skipped view"{% endif %}>
+      <option value="" {% if not source_q %}selected{% endif %}>Any</option>
+      <option value="manual" {% if source_q == 'manual' %}selected{% endif %}>Manual</option>
+      <option value="auto" {% if source_q == 'auto' %}selected{% endif %}>Auto-matched</option>
+      <option value="import" {% if source_q == 'import' %}selected{% endif %}>Imported</option>
+    </select>
+  </div>
+</div>
+
+<div class="view-toolbar">
+  <label class="toggle-check" title="Bucket results by artist instead of a flat list">
+    <input type="checkbox" id="toggle-group" {% if view == 'skipped' %}disabled{% endif %}>
+    Group by artist
+  </label>
+  <div class="layout-toggle" role="group" aria-label="Layout">
+    <button type="button" class="layout-btn" id="layout-list" title="List view" aria-label="List view">☰</button>
+    <button type="button" class="layout-btn" id="layout-grid" title="Grid view" aria-label="Grid view">▦</button>
   </div>
 </div>
 

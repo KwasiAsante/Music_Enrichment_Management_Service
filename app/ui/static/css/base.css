@@ -155,6 +155,53 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 }
 .excluded-form input[type="text"]:focus { border-color: var(--accent); }
 
+/* ── Library: view toolbar (group-by-artist toggle + layout switch) ────── */
+
+.view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.toggle-check {
+  display: inline-flex; align-items: center; gap: 7px; font-family: 'DM Mono', monospace;
+  font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+}
+.toggle-check input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+.toggle-check:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.layout-toggle { display: inline-flex; border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; }
+.layout-btn {
+  background: var(--surface); border: none; color: var(--muted); font-size: 14px;
+  padding: 6px 12px; cursor: pointer; line-height: 1; transition: background 0.15s, color 0.15s;
+}
+.layout-btn + .layout-btn { border-left: 1px solid var(--border2); }
+.layout-btn:hover { color: var(--text); }
+.layout-btn.active { background: var(--accent); color: #fff; }
+
+/* ── Library: grid layout ───────────────────────────────────────────────── */
+
+.results.grid-mode {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
+}
+.results.grid-mode .result-card { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; }
+.results.grid-mode .info-title { white-space: normal; }
+.results.grid-mode .info-meta { flex-wrap: wrap; }
+
+/* ── Library: group-by-artist ───────────────────────────────────────────── */
+
+.artist-group { margin-bottom: 22px; }
+.artist-group-header {
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.artist-group-count {
+  font-weight: 400; color: var(--muted); background: var(--subtle); border-radius: 10px;
+  padding: 1px 8px; font-size: 10px;
+}
+.artist-group-albums { display: flex; flex-direction: column; gap: 6px; }
+.results.grid-mode .artist-group-albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.group-truncated {
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--warn); background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.25); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;
+}
+.badge-source { background: var(--subtle); color: var(--muted); }
+
 /* ── Log ─────────────────────────────────────────────────────────────── */
 
 .log { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.9; max-height: 260px; overflow-y: auto; }

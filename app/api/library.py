@@ -6,7 +6,10 @@ JSON storage layer:
 * ``POST /scan``    — rebuild album_list.json (optionally with cleanup),
                       recording the run in the jobs table + activity log.
 * ``GET  /albums``  — browse album_list.json, paginated, with artist,
-                      unmapped, and enriched filters.
+                      folder, unmapped, enriched, and mapping-source filters.
+* ``GET  /albums/grouped`` — the same filters, bucketed by artist instead
+                      of paginated — backs the Library page's "group by
+                      artist" view.
 * ``GET  /skipped`` — browse skipped_albums.json (low-confidence VGMDB
                       matches beets declined to auto-tag).
 * ``GET  /stats``   — dashboard counts.
@@ -29,6 +32,8 @@ from app.core.library_scanner import LibraryScanner
 from app.models.library import (
     AlbumEntry,
     AlbumsPage,
+    ArtistGroup,
+    GroupedAlbumsPage,
     LibraryStats,
     ScanRequest,
     ScanResult,
@@ -41,6 +46,20 @@ log = logging.getLogger("music-lib-helper.api.library")
 
 router = APIRouter(prefix="/api/v1/library", tags=["library"])
 
+# Real per-mapping "source" values are free-form (see VGMDBMapper.set_mapping /
+# BeetsEnricher._save_auto_mapping) — "manual" from the UI, "import" from a
+# restored backup, and a handful of auto-resolution reasons. The "source"
+# filter buckets the auto-resolution ones under "auto" so the dropdown stays
+# to three options instead of exposing every internal reason string.
+_AUTO_MAPPING_SOURCES = frozenset({
+    "mb_url_rel", "search_catalog", "search_barcode", "search_title",
+})
+
+# Hard cap on how many albums the grouped-by-artist view will bucket and
+# return in one response — grouping isn't paginated, so a filter that
+# matches an entire multi-thousand-album library needs a backstop.
+GROUPED_ALBUMS_CAP = 2000
+
 
 def _has_vgmdb_association(mb_release_id: str | None, mapping: dict) -> bool:
     """Mirror of map-vgmdb.py's unmapped logic: an album counts as mapped if
@@ -51,6 +70,73 @@ def _has_vgmdb_association(mb_release_id: str | None, mapping: dict) -> bool:
     if mb_release_id in mapping:
         return True
     return mb_release_id.startswith("vgmdb-")
+
+
+def _matches_source(mapping_source: str | None, source_filter: str | None) -> bool:
+    """True if ``mapping_source`` passes the ``source`` query filter.
+    ``source_filter=None`` (not requested) always passes."""
+    if not source_filter:
+        return True
+    if not mapping_source:
+        return False
+    if source_filter == "auto":
+        return mapping_source in _AUTO_MAPPING_SOURCES
+    return mapping_source == source_filter
+
+
+def _filtered_entries(
+    *,
+    artist: str | None,
+    folder: str | None,
+    unmapped: bool,
+    enriched: bool,
+    source: str | None,
+) -> list[AlbumEntry]:
+    """Shared filter/build logic behind both ``/albums`` and
+    ``/albums/grouped`` — one place for the filtering policy so the two
+    views can never quietly drift apart."""
+    album_list = store.album_list.read()
+    mapping = store.vgmdb_mapping.read()
+    enriched_set = store.enriched_set()
+
+    artist_q = artist.lower() if artist else None
+    folder_q = folder.lower() if folder else None
+
+    entries: list[AlbumEntry] = []
+    for folder_name, info in album_list.items():
+        mb_id = info.get("mb_release_id")
+        mapped = _has_vgmdb_association(mb_id, mapping)
+        is_enriched = bool(mb_id and mb_id in enriched_set)
+        mapping_entry = mapping.get(mb_id) if mb_id else None
+        mapping_source = mapping_entry.get("source") if mapping_entry else None
+
+        if artist_q and artist_q not in info.get("artist", "").lower():
+            continue
+        if folder_q and folder_q not in (info.get("folder") or folder_name).lower():
+            continue
+        if unmapped and mapped:
+            continue
+        if enriched and not is_enriched:
+            continue
+        if not _matches_source(mapping_source, source):
+            continue
+
+        entries.append(
+            AlbumEntry(
+                folder_name=folder_name,
+                artist=info.get("artist", ""),
+                album=info.get("album", ""),
+                mb_release_id=mb_id,
+                folder=info.get("folder", ""),
+                mapped=mapped,
+                enriched=is_enriched,
+                mapping_source=mapping_source,
+            )
+        )
+
+    # Stable ordering: artist, then album.
+    entries.sort(key=lambda e: (e.artist.lower(), e.album.lower()))
+    return entries
 
 
 # ── POST /library/scan ──────────────────────────────────────────────────────
@@ -107,6 +193,10 @@ def list_albums(
         default=None,
         description="Case-insensitive substring match on the artist name.",
     ),
+    folder: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the album's folder path.",
+    ),
     unmapped: bool = Query(
         default=False,
         description="Return only albums with no VGMDB association.",
@@ -115,6 +205,12 @@ def list_albums(
         default=False,
         description="Return only albums whose mb_release_id is in the enriched log.",
     ),
+    source: str | None = Query(
+        default=None,
+        description="Filter by mapping source: 'manual', 'import', 'auto' "
+        "(any auto-resolved reason), or none to not filter. Albums with no "
+        "mapping never match a non-empty source filter.",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> AlbumsPage:
@@ -122,47 +218,64 @@ def list_albums(
 
     ``unmapped`` and ``enriched`` can combine (though in practice an
     enriched album is never unmapped) — each is applied independently,
-    same as ``artist``.
+    same as the other filters. See ``GET /albums/grouped`` for the
+    artist-grouped, unpaginated equivalent.
     """
-    album_list = store.album_list.read()
-    mapping = store.vgmdb_mapping.read()
-    enriched_set = store.enriched_set()
-
-    artist_q = artist.lower() if artist else None
-
-    entries: list[AlbumEntry] = []
-    for folder_name, info in album_list.items():
-        mb_id = info.get("mb_release_id")
-        mapped = _has_vgmdb_association(mb_id, mapping)
-        is_enriched = bool(mb_id and mb_id in enriched_set)
-
-        if artist_q and artist_q not in info.get("artist", "").lower():
-            continue
-        if unmapped and mapped:
-            continue
-        if enriched and not is_enriched:
-            continue
-
-        entries.append(
-            AlbumEntry(
-                folder_name=folder_name,
-                artist=info.get("artist", ""),
-                album=info.get("album", ""),
-                mb_release_id=mb_id,
-                folder=info.get("folder", ""),
-                mapped=mapped,
-                enriched=is_enriched,
-            )
-        )
-
-    # Stable ordering: artist, then album.
-    entries.sort(key=lambda e: (e.artist.lower(), e.album.lower()))
+    entries = _filtered_entries(
+        artist=artist, folder=folder, unmapped=unmapped,
+        enriched=enriched, source=source,
+    )
 
     total = len(entries)
     start = (page - 1) * limit
     page_items = entries[start : start + limit]
 
     return AlbumsPage(total=total, page=page, limit=limit, albums=page_items)
+
+
+# ── GET /library/albums/grouped ─────────────────────────────────────────────
+@router.get("/albums/grouped", response_model=GroupedAlbumsPage)
+def list_albums_grouped(
+    artist: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the artist name.",
+    ),
+    folder: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the album's folder path.",
+    ),
+    unmapped: bool = Query(default=False),
+    enriched: bool = Query(default=False),
+    source: str | None = Query(
+        default=None,
+        description="Filter by mapping source: 'manual', 'import', or 'auto'.",
+    ),
+) -> GroupedAlbumsPage:
+    """Every matching album, bucketed by artist — the "group by artist"
+    view. Not paginated (grouping across pages would split artists across
+    page boundaries), but capped at :data:`GROUPED_ALBUMS_CAP` albums;
+    narrow the filters if ``truncated`` comes back true.
+    """
+    entries = _filtered_entries(
+        artist=artist, folder=folder, unmapped=unmapped,
+        enriched=enriched, source=source,
+    )
+    total = len(entries)
+    truncated = total > GROUPED_ALBUMS_CAP
+    entries = entries[:GROUPED_ALBUMS_CAP]
+
+    buckets: dict[str, list[AlbumEntry]] = {}
+    for entry in entries:
+        buckets.setdefault(entry.artist, []).append(entry)
+
+    groups = [
+        ArtistGroup(artist=artist_name, count=len(albums), albums=albums)
+        for artist_name, albums in sorted(buckets.items(), key=lambda kv: kv[0].lower())
+    ]
+
+    return GroupedAlbumsPage(
+        total=total, total_artists=len(groups), truncated=truncated, groups=groups,
+    )
 
 
 # ── GET /library/skipped ─────────────────────────────────────────────────────

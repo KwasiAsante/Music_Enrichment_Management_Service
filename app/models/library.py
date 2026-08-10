@@ -84,6 +84,12 @@ class AlbumEntry(BaseModel):
     enriched: bool = Field(
         description="True if this album's mb_release_id is in the enriched log.",
     )
+    mapping_source: str | None = Field(
+        default=None,
+        description="The 'source' field from vgmdb_mapping.json when mapped "
+        "(e.g. 'manual', 'import', 'mb_url_rel', 'search_catalog', "
+        "'search_barcode', 'search_title'). None when unmapped.",
+    )
 
 
 class AlbumsPage(BaseModel):
@@ -93,6 +99,35 @@ class AlbumsPage(BaseModel):
     page: int
     limit: int
     albums: list[AlbumEntry]
+
+
+# ── GET /library/albums/grouped ─────────────────────────────────────────────
+class ArtistGroup(BaseModel):
+    """All matching albums for one artist, for the grouped-by-artist view."""
+
+    artist: str
+    count: int
+    albums: list[AlbumEntry]
+
+
+class GroupedAlbumsPage(BaseModel):
+    """Response from ``GET /library/albums/grouped``.
+
+    Unlike ``AlbumsPage`` this isn't paginated — grouping only makes sense
+    over the whole filtered set, so every matching album is fetched and
+    bucketed by artist server-side. ``total`` reflects every match; if
+    that exceeds the internal cap, ``truncated`` is set and only the first
+    ``total_artists`` artists (alphabetically) are actually included in
+    ``groups`` — narrow the filters (artist/folder/source) to see the rest.
+    """
+
+    total: int = Field(description="Total albums matching the filters, before any cap.")
+    total_artists: int = Field(description="Number of artist groups actually returned.")
+    truncated: bool = Field(
+        description="True if the match count exceeded the cap and the "
+        "result was cut off.",
+    )
+    groups: list[ArtistGroup]
 
 
 # ── GET /library/skipped ────────────────────────────────────────────────────
