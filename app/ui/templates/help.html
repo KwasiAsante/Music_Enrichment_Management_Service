@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Help — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Help</div>
+    <h1>Help &amp; Support</h1>
+    <p class="page-sub">What each page does, and how to get the most out of it.</p>
+  </div>
+</div>
+
+<div class="help-toc">
+  <a href="#workflow">Workflow Guide</a>
+  <a href="#dashboard">Dashboard</a>
+  <a href="#mappings">Mappings</a>
+  <a href="#enrich">Enrich</a>
+  <a href="#library">Library</a>
+  <a href="#logs">Logs</a>
+  <a href="#music-search">Music Search</a>
+  <a href="#faq">FAQ &amp; Troubleshooting</a>
+</div>
+
+<section class="help-section" id="workflow">
+  <h2><span class="icon">▸</span> Workflow Guide</h2>
+  <p class="help-intro">The full path from "no files yet" to "fully tagged" — six pages, in order. Click a stage to jump to its detail below.</p>
+
+  <div class="workflow-diagram">
+    <a href="#step-0" class="wf-stage wf-stage-optional">
+      <span class="wf-stage-icon">♪</span>
+      <span class="wf-stage-title">0. Find &amp; Download</span>
+      <span class="wf-stage-sub">Music Search</span>
+      <span class="wf-stage-optional-tag">optional</span>
+    </a>
+    <span class="wf-arrow">→</span>
+    <a href="#step-1" class="wf-stage">
+      <span class="wf-stage-icon">◆</span>
+      <span class="wf-stage-title">1. Scan</span>
+      <span class="wf-stage-sub">Dashboard</span>
+    </a>
+    <span class="wf-arrow">→</span>
+    <a href="#step-2" class="wf-stage">
+      <span class="wf-stage-icon">⚭</span>
+      <span class="wf-stage-title">2. Review</span>
+      <span class="wf-stage-sub">Mappings</span>
+    </a>
+    <span class="wf-arrow">→</span>
+    <a href="#step-3" class="wf-stage">
+      <span class="wf-stage-icon">⚭</span>
+      <span class="wf-stage-title">3. Map / Skip / Exclude</span>
+      <span class="wf-stage-sub">Mappings</span>
+    </a>
+    <span class="wf-arrow">→</span>
+    <a href="#step-4" class="wf-stage">
+      <span class="wf-stage-icon">▶</span>
+      <span class="wf-stage-title">4. Enrich</span>
+      <span class="wf-stage-sub">Enrich</span>
+    </a>
+    <span class="wf-arrow">→</span>
+    <a href="#step-5" class="wf-stage">
+      <span class="wf-stage-icon">▤</span>
+      <span class="wf-stage-title">5. Verify</span>
+      <span class="wf-stage-sub">Library</span>
+    </a>
+  </div>
+
+  <ol class="wf-steps">
+    <li class="wf-step wf-step-optional" id="step-0">
+      <div class="wf-step-num">0</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Find &amp; download albums <span class="wf-optional-badge">optional</span> <a class="wf-step-page" href="/music-search">Music Search →</a></div>
+        <p>Skip this step if you already have the files — it's only for building out your library from scratch. Search MusicBrainz for a release, then use the Prowlarr/Nyaa tab to find and send a download to qBittorrent, which drops it into your configured save path.</p>
+        <p class="wf-step-result">→ This is a separate flow from the rest of the app (see the Music Search section below) — once files land on disk, step 1 (Scan) is what actually notices them.</p>
+      </div>
+    </li>
+    <li class="wf-step" id="step-1">
+      <div class="wf-step-num">1</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Add albums to the library <a class="wf-step-page" href="/">Dashboard →</a></div>
+        <p>Click <strong>Scan Library</strong> to walk your music folders and build (or refresh) the album list — this is what every other page reads from, so it's the real starting point whether your files just arrived via step 0 or were already there. Tick <strong>also remove empty folders</strong> if you also want a cleanup pass for folders with no audio in them; it's opt-in because it deletes folders.</p>
+        <p class="wf-step-result">→ New albums immediately show up in the stat cards, and any that need a VGMDB match land in Mappings' Unmapped list.</p>
+      </div>
+    </li>
+    <li class="wf-step" id="step-2">
+      <div class="wf-step-num">2</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Review what needs mapping <a class="wf-step-page" href="/mappings">Mappings →</a></div>
+        <p>Open the <strong>Unmapped Albums</strong> list — every album scanned in step 1 that has no VGMDB association yet. Use the <strong>Artist filter</strong> to work through one artist's backlog at a time instead of the whole list at once.</p>
+        <p class="wf-step-result">→ Each row is a decision point — which one you pick depends on what the album actually is (see step 3).</p>
+      </div>
+    </li>
+    <li class="wf-step" id="step-3">
+      <div class="wf-step-num">3</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Map, skip, or exclude <a class="wf-step-page" href="/mappings">Mappings →</a></div>
+        <p>For each unmapped album, pick one of three paths:</p>
+        <ul class="help-list wf-substeps">
+          <li><strong>It's on VGMDB</strong> — click <span class="badge badge-blue">Search</span>, review the candidates, click <span class="badge badge-blue">Set</span> on the right one.</li>
+          <li><strong>It genuinely isn't on VGMDB</strong> — click <span class="badge badge-purple">Skip</span>. It moves to the Skipped Albums panel and won't be asked about again (restore it any time if you change your mind).</li>
+          <li><strong>The whole artist will never be on VGMDB</strong> (Western acts, etc.) — add them once to <strong>Excluded Artists</strong> instead of skipping every one of their albums individually. This also keeps bulk enrichment from wasting time on them.</li>
+        </ul>
+        <p class="wf-step-result">→ Worth doing before a big session: <strong>Export a mapping backup</strong> from the Backup &amp; Restore panel — these decisions take real effort to build.</p>
+      </div>
+    </li>
+    <li class="wf-step" id="step-4">
+      <div class="wf-step-num">4</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Run enrichment <a class="wf-step-page" href="/enrich">Enrich →</a></div>
+        <p>Once mappings look right, start a run — leave the artist/album filters blank to run against everything, or scope to just what you mapped this session. Try <strong>Dry run</strong> first if you want to preview matches before anything gets written to your files.</p>
+        <p class="wf-step-result">→ Watch the live progress bar and log while it runs; <strong>Recent Enrich Activity</strong> below keeps a history once it's done.</p>
+      </div>
+    </li>
+    <li class="wf-step" id="step-5">
+      <div class="wf-step-num">5</div>
+      <div class="wf-step-body">
+        <div class="wf-step-title">Verify the results <a class="wf-step-page" href="/library">Library →</a></div>
+        <p>Switch the <strong>View</strong> filter to <strong>Enriched</strong> to confirm the albums you just ran actually got tagged. Anything still <strong>Unmapped</strong> needs another pass through steps 2–3; anything in the <strong>Skipped</strong> view was a low-confidence auto-match beets declined to guess at — those usually need a manual Search &amp; Set back on Mappings instead.</p>
+        <p class="wf-step-result">→ Once your library's in good shape, try <strong>Group by artist</strong> with the <strong>grid layout</strong> for a nicer browsing view with cover art.</p>
+      </div>
+    </li>
+  </ol>
+
+  <p class="wf-loop">From here it loops: new albums keep landing via <strong>Scan</strong>, so steps 2–5 repeat naturally as your library grows.</p>
+</section>
+
+<section class="help-section" id="dashboard">
+  <h2><span class="icon">◆</span> Dashboard</h2>
+  <p class="help-intro">The at-a-glance overview — library health, quick actions, and recent activity.</p>
+  <ul class="help-list">
+    <li><strong>Stat cards</strong> (Total / Enriched / Unmapped / Skipped) are clickable — each jumps straight to <a href="/library">Library</a> pre-filtered to that view.</li>
+    <li><strong>Scan Library</strong> rebuilds the album list from what's actually on disk. Tick <strong>also remove empty folders</strong> to also delete album/artist folders with no files or no audio — this is destructive, so it's opt-in.</li>
+    <li><strong>Fix Artist Paths</strong> normalizes artist folder names (e.g. kanji → romanized) where that's been configured.</li>
+    <li><strong>Run Enrichment</strong> is a shortcut straight to the <a href="/enrich">Enrich</a> page.</li>
+    <li><strong>Recent Activity</strong> shows the latest log entries across every category, filterable by category — the same underlying log as the full <a href="/logs">Logs</a> page, just the tail end of it.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="mappings">
+  <h2><span class="icon">⚭</span> Mappings</h2>
+  <p class="help-intro">Where an album's <code>MusicBrainz release id</code> gets tied to its <code>VGMDB id</code> — the core data this whole app is built around.</p>
+  <ul class="help-list">
+    <li><strong>Unmapped Albums</strong> lists every album with no VGMDB association yet. <strong>Search</strong> runs the same lookup pipeline enrichment uses (catalog number, barcode, title); <strong>Set</strong> saves whichever result you pick.</li>
+    <li><strong>Skip</strong> (on an unmapped album) marks it <code>vgmdb_id: "skip"</code> — "confirmed, not on VGMDB, stop asking." It moves into the <strong>Skipped Albums</strong> panel below, where <strong>Restore</strong> undoes it and puts the album back into Unmapped.</li>
+    <li><strong>Excluded Artists</strong> is a broader tool than Skip — it's a whole artist (Western acts with no VGMDB presence, etc.), not one album. An excluded artist's albums disappear from Unmapped <em>and</em> get skipped automatically during bulk enrichment, so you don't have to Skip every one of their albums individually. Add or remove artists from the panel any time; removing one puts their albums back into consideration immediately.</li>
+    <li><strong>Backup &amp; Restore</strong> exports the entire mapping file as a timestamped JSON download, or restores/merges one back in. <strong>Merge</strong> adds/overwrites on top of what you have; <strong>Replace</strong> wipes the mapping first and uses only what's in the file — a confirmation prompt guards against doing that by accident.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="enrich">
+  <h2><span class="icon">▶</span> Enrich</h2>
+  <p class="help-intro">Runs the bulk tagging pass that writes resolved VGMDB metadata into your audio files.</p>
+  <ul class="help-list">
+    <li><strong>Artist filter</strong> / <strong>Album filter</strong> scope a run to specific names (comma-separated); leave blank to run against everything.</li>
+    <li><strong>Redo (specific albums)</strong> forces a re-run on named albums even if they were already processed — useful after fixing a mapping.</li>
+    <li><strong>Redo skipped</strong> re-attempts albums that were previously left untagged for low match confidence (see the Library page's <a href="/library?view=skipped">Skipped view</a>) instead of leaving them alone.</li>
+    <li><strong>Dry run</strong> reports what the run would do — matches found, tags that would change — without writing anything to disk. Good for sanity-checking filters before a real run.</li>
+    <li>Progress (a live badge, count, and log) shows while a run is in flight; <strong>Recent Enrich Activity</strong> below keeps a history of past runs.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="library">
+  <h2><span class="icon">▤</span> Library</h2>
+  <p class="help-intro">Browse every album that's been scanned, with its current status.</p>
+  <ul class="help-list">
+    <li><strong>Filters:</strong> Artist and Folder are substring matches; <strong>View</strong> switches between All / Unmapped / Enriched / Skipped; <strong>Mapped via</strong> narrows by how a mapping was made — Manual (set by hand on the Mappings page), Auto-matched (resolved automatically during a search or enrichment run), or Imported (restored from a backup file).</li>
+    <li><strong>Group by artist</strong> buckets results under artist headers instead of a flat list. Click a header to collapse/expand it, or use <strong>Collapse all</strong> / <strong>Expand all</strong> in the toolbar. Not paginated — it fetches everything matching your filters, capped at 2000 albums (you'll see a note if a filter set is broader than that).</li>
+    <li><strong>List / Grid layout</strong> — grid mode shows a square cover-art thumbnail per album, pulled from a cover image file in the album folder (<code>cover.jpg</code>, <code>folder.png</code>, etc.) or whatever's embedded in the first audio file. An album with neither just shows a plain placeholder — that's expected, not an error.</li>
+    <li>The <strong>Skipped</strong> view here is <em>not</em> the same thing as Mappings' Skipped Albums panel — see the FAQ below for the distinction, it trips people up.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="logs">
+  <h2><span class="icon">≡</span> Logs</h2>
+  <p class="help-intro">The full activity history — every scan, mapping change, enrichment run, and error, in one filterable feed.</p>
+  <ul class="help-list">
+    <li>Filter by <strong>Category</strong> (scan, mapping, enrich, etc.), <strong>Level</strong> (info/warning/error), or an exact <strong>Artist</strong> name.</li>
+    <li><strong>Refresh</strong> pulls the latest entries — the page doesn't auto-poll, so use it after kicking off something elsewhere.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="music-search">
+  <h2><span class="icon">♪</span> Music Search</h2>
+  <p class="help-intro">A standalone downloader flow, separate from the mapping/enrichment pipeline above: MusicBrainz → Lidarr → Prowlarr/Nyaa → qBittorrent.</p>
+  <ul class="help-list">
+    <li><strong>① MusicBrainz Search</strong> — find a release by name, filter by type (Album/Single/EP/Soundtrack/Compilation).</li>
+    <li><strong>② Prowlarr / Nyaa Search</strong> — once you've picked a release, search indexers for a download and send it to qBittorrent.</li>
+    <li><strong>Music Save Path</strong> controls where qBittorrent saves finished downloads. Lidarr/Prowlarr/qBittorrent credentials themselves are configured server-side (<code>.env</code>) — nothing sensitive lives on this page or in your browser.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="faq">
+  <h2><span class="icon">?</span> FAQ &amp; Troubleshooting</h2>
+
+  <div class="faq-item">
+    <div class="faq-q">What's the difference between "Skipped" on the Library page and "Skipped Albums" on the Mappings page?</div>
+    <div class="faq-a">They're unrelated, despite the name. <strong>Mappings → Skipped Albums</strong> is albums <em>you</em> explicitly marked "not on VGMDB, stop asking" — a manual decision. <strong>Library → Skipped view</strong> is albums where enrichment <em>found</em> a VGMDB candidate but its match confidence was below the configured threshold, so it declined to auto-tag rather than guess — an automatic, low-confidence outcome. An album can show up in one without ever touching the other.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">An artist I expect to see isn't showing up in Unmapped. Where did they go?</div>
+    <div class="faq-a">Check <strong>Mappings → Excluded Artists</strong> — if the artist is on that list, their albums are deliberately left out of Unmapped (and skipped by bulk enrichment). Remove them from the list to bring their albums back into consideration.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Grid view shows a placeholder instead of cover art for some albums.</div>
+    <div class="faq-a">The app looks for a cover-image file in the album folder first (<code>cover.jpg</code>, <code>folder.png</code>, <code>front.jpg</code>, <code>albumart.png</code>, etc.), then falls back to whatever's embedded in the first audio file. If neither exists, there's simply no art to show — add a cover file to the folder, or embed art in the audio files, and it'll pick it up. Note: embedded art in <code>.ape</code> files specifically isn't supported.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">How do I back up my VGMDB mappings before trying something risky?</div>
+    <div class="faq-a">Mappings page → <strong>Backup &amp; Restore</strong> → <strong>Export backup</strong>. It downloads the full mapping as a timestamped JSON file. If something goes wrong later, restore it from the same panel — <strong>Merge</strong> is the safe option; <strong>Replace</strong> wipes the current mapping first, so use it deliberately.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">I dismissed a tip banner and want it back.</div>
+    <div class="faq-a">Tip dismissals are remembered per-browser, not server-side. Clearing this site's data in your browser (or opening the app in a private window) will bring every tip back.</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q">Something looks wrong and I'm not sure why.</div>
+    <div class="faq-a">The <a href="/logs">Logs</a> page has a full, filterable history of everything the app has done — scans, mapping changes, enrichment runs, and any errors along the way. It's usually the fastest way to see what actually happened.</div>
+  </div>
+</section>
+{% endblock %}

@@ -40,6 +40,9 @@ these are top-level paths so they read naturally in a browser
                         context (``qbit_save_path``) is passed in — the
                         page no longer carries any API keys or passwords;
                         see ``app.api.proxy`` for where those moved.
+* ``GET /help``      — Static documentation page, no data. Per-page
+                        dismissible tip banners (``templates/_tip_banner.html``,
+                        ``static/js/tips.js``) link into this page's anchors.
 
 Each handler passes ``request`` in the template context — required by
 Jinja2Templates, and also what ``base.html`` uses to compute which sidebar
@@ -210,3 +213,10 @@ def music_search_page(request: Request) -> HTMLResponse:
         "music_search.html",
         {"qbit_save_path": settings.qbit_save_path},
     )
+
+
+# ── GET /help ────────────────────────────────────────────────────────────────
+@router.get("/help", response_class=HTMLResponse)
+def help_page(request: Request) -> HTMLResponse:
+    """Static documentation — no data to fetch, just the template."""
+    return templates.TemplateResponse(request, "help.html", {})

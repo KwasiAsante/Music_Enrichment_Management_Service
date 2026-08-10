@@ -9,10 +9,23 @@
 </head>
 <body>
 
+<script>
+  // Runs synchronously, before the sidebar markup below is parsed, so a
+  // previously-collapsed sidebar doesn't flash open on every page load.
+  if (localStorage.getItem('sidebar_collapsed') === '1') {
+    document.documentElement.classList.add('sidebar-collapsed');
+  }
+</script>
+
 <nav class="sidebar">
   <div class="sidebar-brand">
-    <div class="eyebrow">▸ Music Library Helper</div>
-    <div class="name">Enrichment Console</div>
+    <div class="sidebar-brand-text">
+      <div class="eyebrow">▸ Music Library Helper</div>
+      <div class="name">Enrichment Console</div>
+    </div>
+    <button type="button" id="sidebar-toggle" class="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar" aria-expanded="true">
+      <span class="sidebar-toggle-icon">‹</span>
+    </button>
   </div>
   <div class="nav">
     {% set nav_items = [
@@ -22,14 +35,17 @@
       ('/library', '▤', 'Library'),
       ('/logs', '≡', 'Logs'),
       ('/music-search', '♪', 'Music Search'),
+      ('/help', '?', 'Help'),
     ] %}
     {% for path, icon, label in nav_items %}
-    <a class="nav-item{% if request.url.path == path %} active{% endif %}" href="{{ path }}">
-      <span class="icon">{{ icon }}</span> {{ label }}
+    <a class="nav-item{% if request.url.path == path %} active{% endif %}" href="{{ path }}" title="{{ label }}">
+      <span class="icon">{{ icon }}</span><span class="label">{{ label }}</span>
     </a>
     {% endfor %}
   </div>
-  <div class="sidebar-footer"><span class="status-dot"></span>Container healthy — v{{ app_version | default('1.0.0') }}</div>
+  <div class="sidebar-footer">
+    <span class="status-dot"></span><span class="sidebar-footer-text">Container healthy — v{{ app_version | default('1.0.0') }}</span>
+  </div>
 </nav>
 
 <main class="main">
@@ -38,6 +54,8 @@
   </div>
 </main>
 
+<script src="{{ url_for('static', path='js/tips.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/sidebar.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

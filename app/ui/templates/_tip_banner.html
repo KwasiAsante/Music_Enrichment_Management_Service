@@ -1,0 +1,23 @@
+{#
+  Dismissible per-page tip banner. Include near the top of a page's
+  {% block content %}, after setting these two (and optionally three)
+  variables just above the include:
+
+    {% set tip_key = "mappings" %}
+    {% set tip_text = "One sentence on the page's key feature." %}
+    {% set tip_href = "/help#mappings" %}   (optional -- omit to hide the link)
+    {% include "_tip_banner.html" %}
+
+  `tip_key` must be unique per page — it's the localStorage key
+  (see static/js/tips.js) that remembers this banner was dismissed, so
+  each page's tip is tracked independently and dismissing one doesn't
+  hide any other.
+#}
+<div class="tip-banner" data-tip-key="{{ tip_key }}">
+  <span class="tip-banner-icon">💡</span>
+  <span class="tip-banner-text">
+    {{ tip_text }}
+    {% if tip_href %}<a href="{{ tip_href }}">Learn more →</a>{% endif %}
+  </span>
+  <button type="button" class="tip-banner-dismiss" aria-label="Dismiss tip">×</button>
+</div>
