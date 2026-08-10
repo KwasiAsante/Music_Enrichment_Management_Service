@@ -9,8 +9,11 @@ these are top-level paths so they read naturally in a browser
 
 * ``GET /``          — Dashboard. Real data: :func:`library_stats` +
                         recent activity from the ``activity_log`` table.
-* ``GET /mappings``  — Real data: :meth:`VGMDBMapper.list_unmapped`. Search/
-                        Set/Skip wired live via ``static/js/mappings.js``.
+* ``GET /mappings``  — Real data: :meth:`VGMDBMapper.list_unmapped`,
+                        :meth:`VGMDBMapper.list_skipped`, and
+                        :meth:`VGMDBMapper.list_excluded_artists`. Search/
+                        Set/Skip/Restore/Exclude all wired live via
+                        ``static/js/mappings.js``.
 * ``GET /enrich``    — Real data: recent ``enrich``-category activity.
                         Run form + live job polling via
                         ``static/js/enrich.js``.
@@ -120,11 +123,18 @@ def dashboard(request: Request) -> HTMLResponse:
 # ── GET /mappings ────────────────────────────────────────────────────────────
 @router.get("/mappings", response_class=HTMLResponse)
 def mappings(request: Request) -> HTMLResponse:
-    unmapped = VGMDBMapper().list_unmapped(artist_filter=None, skip_western=True)
+    mapper = VGMDBMapper()
+    unmapped = mapper.list_unmapped(artist_filter=None, skip_western=True)
+    skipped = mapper.list_skipped()
+    excluded_artists = mapper.list_excluded_artists()
     return templates.TemplateResponse(
         request,
         "mappings.html",
-        {"unmapped": unmapped},
+        {
+            "unmapped": unmapped,
+            "skipped": skipped,
+            "excluded_artists": excluded_artists,
+        },
     )
 
 

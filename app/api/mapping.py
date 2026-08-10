@@ -1,18 +1,27 @@
 """``/api/v1/mapping/*`` — VGMDB mapping list, search, set, delete,
-export/import.
+export/import, and the two "purposely excluded" lists (skipped albums,
+excluded artists).
 
-Seven endpoints:
-
-* ``GET    /``                — list every entry in ``vgmdb_mapping.json``
-                                (optionally filtered by artist).
-* ``GET    /unmapped``        — list album_list entries with no mapping.
-* ``POST   /search``          — run the four-step VGMDB search pipeline
-                                for one album. Used by the Phase 2 Web UI's
-                                Mappings page and by ad-hoc CLI workflows.
-* ``PUT    /{mb_release_id}`` — set / update a single mapping.
-* ``DELETE /{mb_release_id}`` — remove a mapping (clears it for re-mapping).
-* ``GET    /export``          — download the whole mapping as a backup file.
-* ``POST   /import``          — restore/merge mappings from a backup file.
+* ``GET    /``                        — list every entry in
+                                        ``vgmdb_mapping.json`` (optionally
+                                        filtered by artist).
+* ``GET    /unmapped``                — list album_list entries with no
+                                        mapping.
+* ``GET    /skipped``                 — mappings explicitly marked
+                                        ``vgmdb_id == "skip"``.
+* ``GET    /excluded-artists``        — artists excluded from "unmapped"
+                                        and bulk enrichment.
+* ``POST   /excluded-artists``        — add an artist to that list.
+* ``DELETE /excluded-artists/{name}`` — remove an artist from that list.
+* ``POST   /search``                  — run the four-step VGMDB search
+                                        pipeline for one album.
+* ``PUT    /{mb_release_id}``         — set / update a single mapping
+                                        (``vgmdb_id="skip"`` marks it skipped).
+* ``DELETE /{mb_release_id}``         — remove a mapping (un-skips it too).
+* ``GET    /export``                  — download the whole mapping as a
+                                        backup file.
+* ``POST   /import``                  — restore/merge mappings from a
+                                        backup file.
 """
 
 from __future__ import annotations
@@ -27,6 +36,8 @@ from fastapi.responses import JSONResponse
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.models.mapping import (
     DeleteMappingResult,
+    ExcludedArtistRequest,
+    ExcludedArtistResult,
     ImportMappingsResult,
     MappingEntry,
     SearchRequest,
@@ -70,6 +81,57 @@ def list_unmapped(
         skip_western=not include_western,
     )
     return [UnmappedEntry(**r) for r in rows]
+
+
+# ── GET /mapping/skipped ────────────────────────────────────────────────────
+@router.get("/skipped", response_model=list[MappingEntry])
+def list_skipped(
+    artist: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the artist field.",
+    ),
+) -> list[MappingEntry]:
+    """Mappings explicitly marked ``vgmdb_id == "skip"`` — albums confirmed
+    to have no VGMDB presence. Restore one with ``DELETE /mapping/{id}``,
+    which puts it back into the unmapped pool."""
+    rows = VGMDBMapper().list_skipped(artist_filter=artist)
+    return [MappingEntry(**r) for r in rows]
+
+
+# ── GET /mapping/excluded-artists ───────────────────────────────────────────
+@router.get("/excluded-artists", response_model=list[str])
+def list_excluded_artists() -> list[str]:
+    """Artists purposely excluded from "unmapped" listings and bulk
+    enrichment (Western acts with no VGMDB presence, etc.)."""
+    return VGMDBMapper().list_excluded_artists()
+
+
+# ── POST /mapping/excluded-artists ──────────────────────────────────────────
+@router.post("/excluded-artists", response_model=ExcludedArtistResult)
+def add_excluded_artist(req: ExcludedArtistRequest) -> ExcludedArtistResult:
+    """Add an artist to the exclusion list."""
+    try:
+        changed = VGMDBMapper().add_excluded_artist(req.artist)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if changed:
+        db.add_activity("mapping", f"excluded artist added: {req.artist}",
+                        artist=req.artist)
+    return ExcludedArtistResult(artist=req.artist, changed=changed)
+
+
+# ── DELETE /mapping/excluded-artists/{artist} ───────────────────────────────
+@router.delete("/excluded-artists/{artist}", response_model=ExcludedArtistResult)
+def remove_excluded_artist(
+    artist: str = Path(..., description="Exact artist name to un-exclude."),
+) -> ExcludedArtistResult:
+    """Remove an artist from the exclusion list — their albums will show
+    up in "unmapped" (and be eligible for bulk enrichment) again."""
+    changed = VGMDBMapper().remove_excluded_artist(artist)
+    if changed:
+        db.add_activity("mapping", f"excluded artist removed: {artist}",
+                        artist=artist)
+    return ExcludedArtistResult(artist=artist, changed=changed)
 
 
 # ── POST /mapping/search ───────────────────────────────────────────────────

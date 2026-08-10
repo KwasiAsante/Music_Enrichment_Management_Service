@@ -27,6 +27,28 @@
   <div id="import-result" class="import-result"></div>
 </section>
 
+<section class="excluded-panel">
+  <div class="section-label">Excluded Artists (<span class="js-excluded-count">{{ excluded_artists | length }}</span>)</div>
+  <p class="panel-hint">Purposely left out of "unmapped" and bulk enrichment — Western acts with no VGMDB presence, etc.</p>
+  <div id="excluded-list" class="chip-row">
+    {% if excluded_artists %}
+      {% for name in excluded_artists %}
+      <span class="chip" data-artist="{{ name }}">
+        {{ name }}
+        <button class="chip-remove js-remove-excluded" type="button" title="Un-exclude" aria-label="Un-exclude {{ name }}">×</button>
+      </span>
+      {% endfor %}
+    {% else %}
+      <span class="chip-empty">No artists excluded.</span>
+    {% endif %}
+  </div>
+  <form id="excluded-form" class="excluded-form">
+    <input type="text" id="excluded-input" placeholder="Artist name to exclude...">
+    <button class="btn btn-ghost btn-sm" type="submit">+ Exclude</button>
+  </form>
+  <div id="excluded-result" class="import-result"></div>
+</section>
+
 <div class="filter-bar">
   <div class="cf" style="flex:1">
     <label>Artist</label>
@@ -63,6 +85,38 @@
     <div class="empty">
       <div class="empty-icon">✓</div>
       Nothing unmapped — every album has a VGMDB association.
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <div class="section-label">Skipped Albums (<span class="js-skipped-count">{{ skipped | length }}</span>)</div>
+  <div id="skipped-container">
+    {% if skipped %}
+    <div class="results">
+      {% for item in skipped %}
+      <div class="result-card"
+           data-mb-id="{{ item.mb_release_id }}"
+           data-artist="{{ item.artist }}"
+           data-album="{{ item.album }}">
+        <div class="info">
+          <div class="info-title">{{ item.artist }} — {{ item.album }}</div>
+          <div class="info-meta">
+            <span class="badge badge-purple">skipped</span>
+            <span>mb: {{ item.mb_release_id }}</span>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm js-restore" type="button">Restore</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">–</div>
+      No albums marked as skipped.
     </div>
     {% endif %}
   </div>

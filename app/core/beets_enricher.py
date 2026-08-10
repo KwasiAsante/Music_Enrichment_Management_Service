@@ -130,13 +130,6 @@ def _has_non_latin(text: str) -> bool:
 
 # ── BeetsEnricher ──────────────────────────────────────────────────────────
 class BeetsEnricher:
-    # Artists explicitly excluded — Western acts. Edit to taste.
-    SKIP_ARTISTS: frozenset[str] = frozenset({
-        "Linkin Park", "Thousand Foot Krutch", "Barenaked Ladies",
-        "Jeff Williams", "Jeff Williams feat. Casey Lee Williams",
-        "Jeff Williams feat. Casey Lee Williams with Alex Abraham",
-    })
-
     # Artists explicitly *enriched* without an MB country lookup —
     # confirmed Japanese, or otherwise definitely on VGMDB.
     ENRICH_ARTISTS: frozenset[str] = frozenset({
@@ -482,9 +475,14 @@ class BeetsEnricher:
         Mirrors the original ``beets-enrich.py`` policy:
         explicit block/allow lists, then MB country/area, then MB
         ``ja*`` aliases, else ``"ask"`` (which in service mode = skip).
+        The block list is ``excluded_artists.json`` — the same list
+        editable from the Mappings page's Excluded Artists panel, so
+        excluding an artist there also stops bulk enrichment from
+        touching them.
         """
-        if artist_name in self.SKIP_ARTISTS:
-            return "no", ""
+        excluded = {a.lower() for a in store.excluded_artists.read()}
+        if artist_name.lower() in excluded:
+            return "no", "explicitly excluded"
         if artist_name in self.ENRICH_ARTISTS:
             return "yes", ""
         if not mb_artist_id:

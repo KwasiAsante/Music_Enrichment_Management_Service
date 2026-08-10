@@ -94,6 +94,21 @@ class DeleteMappingResult(BaseModel):
     dry_run: bool = False
 
 
+# ── excluded-artists CRUD ───────────────────────────────────────────────────
+class ExcludedArtistRequest(BaseModel):
+    """Body for ``POST /mapping/excluded-artists``."""
+    artist: str = Field(description="Exact artist name to exclude.")
+
+
+class ExcludedArtistResult(BaseModel):
+    """Response from ``POST``/``DELETE /mapping/excluded-artists``."""
+    artist:  str
+    changed: bool = Field(
+        description="True if the list actually changed — false for adding "
+        "a duplicate or removing an artist that wasn't present.",
+    )
+
+
 # ── POST /mapping/import ───────────────────────────────────────────────────
 class ImportMappingsResult(BaseModel):
     """Response from ``POST /mapping/import``."""

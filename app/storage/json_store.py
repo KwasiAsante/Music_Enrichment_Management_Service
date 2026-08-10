@@ -9,6 +9,7 @@ the data volume (``settings.app_data_dir``):
     mb_artist_cache.json  {mb_artist_id: <raw MusicBrainz artist response>}
     skipped_albums.json   {mb_id: {vgmdb_id, folder, artist, album,
                                    match_percentage, threshold, skipped_reason}}
+    excluded_artists.json [artist_name, ...]  (Western acts w/ no VGMDB presence)
 
 They stay plain JSON on purpose — the standalone CLI scripts in
 ``scripts/`` read and write the exact same files, and they're trivial to
@@ -25,6 +26,7 @@ write goes through :class:`JsonFile`, which gives:
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -37,13 +39,28 @@ from app.config import settings
 
 log = logging.getLogger("music-lib-helper.storage")
 
+# Seed contents for excluded_artists.json the first time it's read and no
+# file exists yet — the same Western-acts list that used to be a hardcoded
+# constant in vgmdb_mapper.py / beets_enricher.py. Once the file exists,
+# this seed is never consulted again; it only prevents behaviour changing
+# on upgrade for anyone who hasn't touched the new artist-exclusion UI yet.
+_DEFAULT_EXCLUDED_ARTISTS: list[str] = [
+    "Linkin Park", "Thousand Foot Krutch", "Barenaked Ladies",
+    "Jeff Williams", "Jeff Williams feat. Casey Lee Williams",
+    "Jeff Williams feat. Casey Lee Williams with Alex Abraham",
+]
+
 
 class JsonFile:
     """A single JSON file with atomic writes and a missing-file default.
 
-    ``default`` is only used as a *type/shape* hint — :meth:`read` returns
-    a fresh empty container of the same kind (dict or list) rather than
-    the shared default instance, so callers can mutate the result freely.
+    :meth:`read` returns a deep copy of ``default`` when the file doesn't
+    exist yet (or is corrupt) — never the shared default instance, so
+    callers can mutate the result freely without that mutation leaking
+    into the next "missing file" read. For most state files ``default``
+    is genuinely empty (``{}``/``[]``); ``excluded_artists.json`` is the
+    one exception, seeded with real content so first-run behaviour
+    matches the old hardcoded constant it replaced.
     """
 
     def __init__(self, path: Path, default: Any) -> None:
@@ -85,11 +102,7 @@ class JsonFile:
 
     # ── helpers ─────────────────────────────────────────────────────────
     def _fresh_default(self) -> Any:
-        if isinstance(self._default, dict):
-            return {}
-        if isinstance(self._default, list):
-            return []
-        return self._default
+        return copy.deepcopy(self._default)
 
 
 class JsonStore:
@@ -106,6 +119,12 @@ class JsonStore:
         self.enriched_albums = JsonFile(settings.enriched_albums_file, [])
         self.mb_artist_cache = JsonFile(settings.mb_artist_cache_file, {})
         self.skipped_albums = JsonFile(data_dir / "skipped_albums.json", {})
+        # Artists purposely excluded from "unmapped" listings *and* from
+        # bulk enrichment — a flat list of exact artist names, editable at
+        # runtime via /api/v1/mapping/excluded-artists (see vgmdb_mapper.py).
+        self.excluded_artists = JsonFile(
+            data_dir / "excluded_artists.json", list(_DEFAULT_EXCLUDED_ARTISTS),
+        )
         # artists_mbids.json is a *list* on disk (matches the format the Picard
         # export pipeline uploads to a GitHub Gist), but the exporter treats it
         # as a dict-keyed-by-Artist internally for merging.

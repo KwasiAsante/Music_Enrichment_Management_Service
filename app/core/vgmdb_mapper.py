@@ -12,10 +12,16 @@ Two responsibilities:
       3. Search VGMDB by catalog → barcode → title (each step only if
          the previous returned nothing).
 
-* **CRUD** over ``vgmdb_mapping.json`` — list, list-unmapped, set, delete.
+* **CRUD** over ``vgmdb_mapping.json`` — list, list-unmapped, set, delete,
+  plus a filtered view over the "skipped" (``vgmdb_id == "skip"``) subset.
   These are thin wrappers over the JSON storage layer; they exist so the
-  API router can stay declarative and the policy (SKIP_ARTISTS, what
-  counts as "unmapped", entry shape) lives in one place.
+  API router can stay declarative and the policy (what counts as
+  "unmapped", entry shape) lives in one place.
+
+* **CRUD** over ``excluded_artists.json`` — artists purposely excluded
+  from "unmapped" listings (Western acts with no VGMDB presence).
+  Editable at runtime; also consulted by ``BeetsEnricher`` so an
+  excluded artist is skipped by bulk enrichment too.
 """
 
 from __future__ import annotations
@@ -32,15 +38,6 @@ from app.core.vgmdb_client import VGMDBClient, VGMDBHint
 from app.storage.json_store import store
 
 log = logging.getLogger("music-lib-helper.vgmdb_mapper")
-
-# Artists explicitly excluded from "unmapped" listings — they're Western
-# acts that intentionally have no VGMDB presence. Customise to taste; the
-# list is read once at module import.
-SKIP_ARTISTS: frozenset[str] = frozenset({
-    "Linkin Park", "Thousand Foot Krutch", "Barenaked Ladies",
-    "Jeff Williams", "Jeff Williams feat. Casey Lee Williams",
-    "Jeff Williams feat. Casey Lee Williams with Alex Abraham",
-})
 
 AUDIO_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
 
@@ -261,17 +258,20 @@ class VGMDBMapper:
 
         Mirrors the original ``cmd_unmapped`` / ``get_unmapped`` logic:
         an album counts as mapped if its ``mb_release_id`` is in
-        ``vgmdb_mapping.json`` OR is itself a ``vgmdb-`` id. Western
-        artists from :data:`SKIP_ARTISTS` are excluded by default.
+        ``vgmdb_mapping.json`` OR is itself a ``vgmdb-`` id. Artists in
+        ``excluded_artists.json`` are excluded by default — see
+        :meth:`list_excluded_artists`.
         """
         albums = store.album_list.read()
         mapping = store.vgmdb_mapping.read()
         af = artist_filter.lower() if artist_filter else None
+        excluded = ({a.lower() for a in store.excluded_artists.read()}
+                    if skip_western else set())
 
         out: list[dict] = []
         for folder_name, info in albums.items():
             artist = info.get("artist") or ""
-            if skip_western and artist in SKIP_ARTISTS:
+            if skip_western and artist.lower() in excluded:
                 continue
             if af and af not in artist.lower():
                 continue
@@ -362,6 +362,45 @@ class VGMDBMapper:
         del mapping[mb_release_id]
         store.vgmdb_mapping.write(mapping)
         log.info("mapping deleted: %s", mb_release_id)
+        return True
+
+    def list_skipped(self, artist_filter: str | None = None) -> list[dict]:
+        """Mapping entries explicitly marked ``vgmdb_id == "skip"`` — i.e.
+        albums confirmed to have no VGMDB presence, so they're excluded
+        from future search/unmapped prompts. A subset of
+        :meth:`list_mappings`."""
+        return [row for row in self.list_mappings(artist_filter=artist_filter)
+                if row.get("vgmdb_id") == "skip"]
+
+    # ── excluded artists (Phase 3 config UI) ────────────────────────────
+    def list_excluded_artists(self) -> list[str]:
+        """Artists purposely excluded from "unmapped" listings and bulk
+        enrichment, case-insensitively sorted."""
+        return sorted(store.excluded_artists.read(), key=str.lower)
+
+    def add_excluded_artist(self, artist: str) -> bool:
+        """Add an artist to the exclusion list. Returns False (no-op) if
+        already present (case-insensitive)."""
+        artist = (artist or "").strip()
+        if not artist:
+            raise ValueError("artist name is required")
+        current = store.excluded_artists.read()
+        if any(a.lower() == artist.lower() for a in current):
+            return False
+        current.append(artist)
+        store.excluded_artists.write(current)
+        log.info("excluded artist added: %s", artist)
+        return True
+
+    def remove_excluded_artist(self, artist: str) -> bool:
+        """Remove an artist from the exclusion list (case-insensitive).
+        Returns True if it was present and removed."""
+        current = store.excluded_artists.read()
+        new_list = [a for a in current if a.lower() != artist.strip().lower()]
+        if len(new_list) == len(current):
+            return False
+        store.excluded_artists.write(new_list)
+        log.info("excluded artist removed: %s", artist)
         return True
 
     # ── export / import (Phase 3 backup-restore) ───────────────────────
