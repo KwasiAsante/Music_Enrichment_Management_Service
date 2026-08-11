@@ -1,12 +1,21 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  Music Library Helper Service
-#  Reads all configuration from .env (see .env.example).
+#
+#  This file alone (plus a filled-in .env — copy .env.example) is enough to
+#  deploy the service: `docker compose up -d` pulls the published image from
+#  GHCR, no clone or local build required.
+#
+#  If you're working from a clone and want to build from source instead
+#  (e.g. you're modifying app code or swapping in your own VGMDB beets
+#  plugin), run `docker compose up -d --build` — the `build:` key below is
+#  only consulted when you pass --build; otherwise it's ignored and the
+#  named `image:` is pulled as-is.
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
   music-lib-helper:
+    image: ghcr.io/kwasiasante/music_enrichment_management_service:latest
     build: .
-    image: music-lib-helper:local
     container_name: music-lib-helper
     restart: unless-stopped
     env_file:
@@ -15,7 +24,8 @@ services:
       - "${APP_PORT:-8900}:8900"
     volumes:
       # Persistent state (vgmdb_mapping.json, enriched_albums.json,
-      # album_list.json, mb_artist_cache.json, app.db, etc.)
+      # album_list.json, mb_artist_cache.json, app.db, etc.). A plain host
+      # folder, not a named volume, so it's easy to find/back up directly.
       - ./data:/data
       # Music library, read-write. The enrichment pipeline writes here:
       # `beet` writes tags on import, non-Latin artist tags get rewritten
@@ -28,12 +38,17 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    networks:
-      - arrs_default
 
-volumes:
-  music-lib-helper-data:
+    # ── Optional: join an existing *arr stack's network ──────────────────
+    # Uncomment if Lidarr/Prowlarr/qBittorrent run in Docker and you'd
+    # rather reach them by container name (e.g. http://lidarr:8686) than by
+    # host IP/port in .env. Replace `arrs_default` with your stack's actual
+    # network name (`docker network ls`) — compose networks are usually
+    # named `<project-folder-name>_default` unless the other stack set a
+    # custom name.
+    # networks:
+    #   - arrs_default
 
-networks:
-  arrs_default:
-    external: true
+# networks:
+#   arrs_default:
+#     external: true

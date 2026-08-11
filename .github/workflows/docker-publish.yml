@@ -1,0 +1,114 @@
+name: Build & publish Docker image
+
+# Publishes ghcr.io/<owner>/<repo> so a deployment only ever needs
+# docker-compose.yml + .env — no clone, no local build. See "Deploy with
+# Docker Compose" in README.md.
+#
+# Triggers:
+#   - push to main            -> tag `latest` (+ `sha-<short>`)
+#   - push of a v*.*.* tag    -> semver tags (`1.2.3`, `1.2`, `1`) + `latest`
+#   - pull requests into main -> build only, both platforms, no push
+#     (validates the Dockerfile still builds without touching the registry)
+#   - workflow_dispatch       -> manual re-run of the same push-branch logic
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # Fails fast on an obviously broken build before spending time on a
+  # multi-arch image build — mainly catches import-time errors (bad syntax,
+  # a genuinely missing dependency) that `docker build` alone would only
+  # surface much later, deeper into the layer cache.
+  sanity-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install the custom VGMDB beets plugin
+        # Mirrors what the Dockerfile does — beets discovers plugins via
+        # `beetsplug.<name>`, a namespace package under site-packages.
+        run: |
+          python -c "import beetsplug, shutil; shutil.copy('app/beets_plugins/VGMplug.py', beetsplug.__path__[0])"
+
+      - name: Import the app
+        # Dummy env so Settings() construction succeeds without a real
+        # .env — this only checks the code imports cleanly, not that any
+        # external service is reachable.
+        env:
+          WEB_UI_PASS: sanity-check
+          APP_DATA_DIR: /tmp/sanity-data
+        run: python -c "import app.main; print('import OK:', app.main.app.title)"
+
+  build-and-push:
+    needs: sanity-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name
+        # GHCR requires the whole image path to be lowercase; the repo
+        # owner (KwasiAsante) isn't, so this can't just be
+        # ${{ github.repository }}.
+        run: echo "IMAGE_NAME=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build (and push on main / tags)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image summary
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -39,9 +39,13 @@ COPY config.yaml ${BEETSDIR}/config.yaml
 # directory that's on PYTHONPATH — i.e. inside site-packages. We discover
 # that path dynamically so it isn't tied to a Python version.
 #
-# Drop your VGMplug_custom.py into app/beets_plugins/ (renamed to VGMplug.py)
-# before building. If the directory has nothing but .gitkeep the build fails
-# loudly — the helper is useless without the plugin.
+# app/beets_plugins/VGMplug.py is committed in the repo and ships in every
+# published image — no manual step needed for a normal deploy. Swapping in
+# your own build: replace that file (keep the name VGMplug.py) and rebuild
+# with `docker compose up -d --build`. Either way, this step still fails
+# loudly if the directory ends up with no .py files at all — the helper is
+# useless without the plugin, so an empty directory should never build
+# silently into a broken image.
 COPY app/beets_plugins/ /tmp/beets_plugins/
 RUN BEETSPLUG_DIR="$(python3 -c 'import beetsplug, os; \
         print(next(p for p in beetsplug.__path__ if "site-packages" in p))')" \
