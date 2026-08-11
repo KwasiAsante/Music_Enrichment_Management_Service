@@ -13,9 +13,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  music-lib-helper:
+  music_enrich_manager:
     image: ghcr.io/kwasiasante/music_enrichment_management_service:latest
-    container_name: music-lib-helper
+    container_name: music_enrich_manager
     restart: unless-stopped
     env_file:
       - .env
