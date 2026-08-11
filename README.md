@@ -35,8 +35,9 @@ files are enough:
 
    ```bash
    mkdir music-lib-helper && cd music-lib-helper
-   curl -O https://raw.githubusercontent.com/KwasiAsante/Music_Enrichment_Management_Service/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/KwasiAsante/Music_Enrichment_Management_Service/main/docker-compose.yml.example
    curl -O https://raw.githubusercontent.com/KwasiAsante/Music_Enrichment_Management_Service/main/.env.example
+   mv docker-compose.yml.example docker-compose.yml
    mv .env.example .env
    ```
 
@@ -63,11 +64,11 @@ docker compose pull && docker compose up -d
 
 ### Building from source instead
 
-If you've cloned the repo — to modify app code, or swap in your own build of the VGMDB plugin — `docker compose up -d --build` builds locally from the `Dockerfile` in the repo root instead of pulling. The `image:` name in `docker-compose.yml` is reused as the local build's tag either way, so switching back to `docker compose up -d` (no `--build`) later just goes back to pulling from GHCR.
+If you've cloned the repo — to modify app code, or swap in your own build of the VGMDB plugin — copy `docker-compose.yml.example` to `docker-compose.yml` (it's gitignored, so your local copy won't show up as a repo change), then run `docker compose up -d --build` to build locally from the `Dockerfile` in the repo root instead of pulling. The `image:` name in `docker-compose.yml` is reused as the local build's tag either way, so switching back to `docker compose up -d` (no `--build`) later just goes back to pulling from GHCR.
 
 ### Joining an existing *arr stack's network
 
-By default this runs on its own Docker network and reaches Lidarr/Prowlarr/qBittorrent via whatever URLs you put in `.env` (host IP, LAN IP, `host.docker.internal`, etc.). If those already run in Docker and you'd rather address them by container name, uncomment the `networks:` block at the bottom of `docker-compose.yml` and point it at your stack's actual network name (`docker network ls`).
+By default this runs on its own Docker network and reaches Lidarr/Prowlarr/qBittorrent via whatever URLs you put in `.env` (host IP, LAN IP, `host.docker.internal`, etc.). If those already run in Docker and you'd rather address them by container name, uncomment the `networks:` block at the bottom of your local `docker-compose.yml` (see `docker-compose.yml.example`) and point it at your stack's actual network name (`docker network ls`).
 
 ## Running without Docker
 
