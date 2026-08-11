@@ -7,15 +7,14 @@
 #
 #  If you're working from a clone and want to build from source instead
 #  (e.g. you're modifying app code or swapping in your own VGMDB beets
-#  plugin), run `docker compose up -d --build` — the `build:` key below is
-#  only consulted when you pass --build; otherwise it's ignored and the
-#  named `image:` is pulled as-is.
+#  plugin), add a docker-compose.override.yml next to this file with a
+#  `build: .` for this service, then run `docker compose up -d --build`.
+#  Compose merges override files in automatically — no edits needed here.
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
   music-lib-helper:
     image: ghcr.io/kwasiasante/music_enrichment_management_service:latest
-    build: .
     container_name: music-lib-helper
     restart: unless-stopped
     env_file:

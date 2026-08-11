@@ -64,7 +64,15 @@ docker compose pull && docker compose up -d
 
 ### Building from source instead
 
-If you've cloned the repo — to modify app code, or swap in your own build of the VGMDB plugin — copy `docker-compose.yml.example` to `docker-compose.yml` (it's gitignored, so your local copy won't show up as a repo change), then run `docker compose up -d --build` to build locally from the `Dockerfile` in the repo root instead of pulling. The `image:` name in `docker-compose.yml` is reused as the local build's tag either way, so switching back to `docker compose up -d` (no `--build`) later just goes back to pulling from GHCR.
+If you've cloned the repo — to modify app code, or swap in your own build of the VGMDB plugin — copy `docker-compose.yml.example` to `docker-compose.yml` (it's gitignored, so your local copy won't show up as a repo change), then add a `docker-compose.override.yml` next to it:
+
+```yaml
+services:
+  music-lib-helper:
+    build: .
+```
+
+Compose merges override files in automatically, so `docker compose up -d --build` now builds locally from the `Dockerfile` in the repo root instead of pulling. The `image:` name in `docker-compose.yml` is reused as the local build's tag either way, so removing `docker-compose.override.yml` later just goes back to pulling from GHCR.
 
 ### Joining an existing *arr stack's network
 
