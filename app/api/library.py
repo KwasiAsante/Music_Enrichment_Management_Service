@@ -12,7 +12,12 @@ JSON storage layer:
                       artist" view.
 * ``GET  /art``     — cover art for one album (folder-level image file,
                       falling back to whatever's embedded in its first
-                      audio file). Backs the Library page's grid view.
+                      audio file). ``side=front|back`` (default front).
+                      Backs the Library grid view and the album detail page.
+* ``GET  /albums/detail`` — everything about one album: tags read from
+                      the files, supplemented by VGMDB/MusicBrainz for
+                      credits/genres/description when mapped to either.
+                      Backs the album detail page.
 * ``GET  /skipped`` — browse skipped_albums.json (low-confidence VGMDB
                       matches beets declined to auto-tag).
 * ``GET  /stats``   — dashboard counts.
@@ -28,13 +33,16 @@ is the thing that becomes a background job (see the enrich router).
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from app.config import settings
-from app.core.cover_art import find_cover_art
+from app.core.album_details import get_album_detail
+from app.core.cover_art import find_album_art
 from app.core.library_scanner import LibraryScanner
+from app.models.album_detail import AlbumDetail
 from app.models.library import (
     AlbumEntry,
     AlbumsPage,
@@ -284,6 +292,20 @@ def list_albums_grouped(
     )
 
 
+def _resolve_album_dir(folder: str) -> Path:
+    """Resolve an ``AlbumEntry.folder`` value to an absolute path inside
+    the artist root, raising 400 if it would escape it (path traversal).
+    Shared by every endpoint that touches the filesystem for one album.
+    """
+    # Same "artist root" convention used throughout app/core/* — see
+    # LibraryScanner, VGMDBMapper, BeetsEnricher.
+    artist_root = (settings.app_music_dir / "synced_music" / "Artist").resolve()
+    album_dir = (artist_root / folder).resolve()
+    if not album_dir.is_relative_to(artist_root):
+        raise HTTPException(400, "folder must resolve inside the artist root")
+    return album_dir
+
+
 # ── GET /library/art ─────────────────────────────────────────────────────
 @router.get("/art")
 def album_art(
@@ -292,23 +314,23 @@ def album_art(
         description="An AlbumEntry.folder value — a path relative to the "
         "artist root, e.g. 'Some Artist/Some Album'.",
     ),
+    side: str = Query(
+        default="front",
+        pattern="^(front|back)$",
+        description="Which side of the cover to return.",
+    ),
 ) -> Response:
     """Cover art for one album: a folder-level cover image if present,
-    else whatever's embedded in its first audio file. 404 if neither
-    exists, so the frontend can fall back to a placeholder — this is
-    expected for a lot of albums, not an error condition.
+    else whatever's embedded in its first audio file. 404 if that side
+    doesn't exist, so the frontend can fall back to a placeholder — this
+    is expected for a lot of albums (especially ``side=back``), not an
+    error condition.
     """
-    # Same "artist root" convention used throughout app/core/* — see
-    # LibraryScanner, VGMDBMapper, BeetsEnricher.
-    artist_root = (settings.app_music_dir / "synced_music" / "Artist").resolve()
-    album_dir = (artist_root / folder).resolve()
+    album_dir = _resolve_album_dir(folder)
 
-    if not album_dir.is_relative_to(artist_root):
-        raise HTTPException(400, "folder must resolve inside the artist root")
-
-    art = find_cover_art(album_dir)
+    art = find_album_art(album_dir).get(side)
     if art is None:
-        raise HTTPException(404, "no cover art available")
+        raise HTTPException(404, f"no {side} cover art available")
 
     data, mime = art
     return Response(
@@ -318,6 +340,48 @@ def album_art(
         # safe to let the browser cache it for a day instead of
         # re-requesting on every scroll through the grid view.
         headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+# ── GET /library/albums/detail ──────────────────────────────────────────────
+@router.get("/albums/detail", response_model=AlbumDetail)
+def album_detail(
+    folder: str = Query(
+        ...,
+        description="An AlbumEntry.folder value — a path relative to the "
+        "artist root, e.g. 'Some Artist/Some Album'.",
+    ),
+) -> AlbumDetail:
+    """Everything about one album: tags read straight from its audio
+    files, supplemented by VGMDB and/or MusicBrainz (when mapped to
+    either) for credit roles, genres, and a description the tags don't
+    carry. See :func:`app.core.album_details.get_album_detail` — this
+    endpoint is just the album lookup plus wiring.
+    """
+    entries = _filtered_entries(
+        artist=None, folder=None, unmapped=False, enriched=False, source=None,
+    )
+    match = next((e for e in entries if e.folder == folder), None)
+    if match is None:
+        raise HTTPException(404, "no album found with that folder")
+
+    mapping = store.vgmdb_mapping.read()
+    vgmdb_id: str | None = None
+    if match.mb_release_id:
+        if match.mb_release_id in mapping:
+            vgmdb_id = mapping[match.mb_release_id].get("vgmdb_id")
+        elif match.mb_release_id.startswith("vgmdb-"):
+            vgmdb_id = match.mb_release_id.removeprefix("vgmdb-")
+
+    return get_album_detail(
+        folder=match.folder,
+        album_dir=_resolve_album_dir(folder),
+        artist=match.artist,
+        album=match.album,
+        mb_release_id=match.mb_release_id,
+        vgmdb_id=vgmdb_id,
+        mapped=match.mapped,
+        enriched=match.enriched,
     )
 
 

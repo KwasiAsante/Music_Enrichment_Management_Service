@@ -360,8 +360,9 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
       `alt="" loading="lazy" decoding="async" onerror="this.remove()">` +
       `</div>`
     : '';
+  const href = `/library/album?folder=${encodeURIComponent(a.folder)}`;
   return `
-    <div class="result-card">
+    <a class="result-card" href="${href}">
       ${art}
       <div class="info">
         <div class="info-title">${title}</div>
@@ -371,13 +372,14 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
           <span>${escapeHtml(a.folder)}</span>
         </div>
       </div>
-    </div>
+    </a>
   `;
 }
 
 function renderSkippedRow(s) {
+  const href = `/library/album?folder=${encodeURIComponent(s.folder)}`;
   return `
-    <div class="result-card">
+    <a class="result-card" href="${href}">
       <div class="info">
         <div class="info-title">${escapeHtml(s.artist)} — ${escapeHtml(s.album)}</div>
         <div class="info-meta">
@@ -386,7 +388,7 @@ function renderSkippedRow(s) {
           <span>vgmdb:${escapeHtml(s.vgmdb_id)}</span>
         </div>
       </div>
-    </div>
+    </a>
   `;
 }
 

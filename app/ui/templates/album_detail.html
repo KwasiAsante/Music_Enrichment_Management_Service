@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{% if detail %}{{ detail.artist }} — {{ detail.album }}{% else %}Album not found{% endif %} — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow"><a href="/library" class="eyebrow-back">← Library</a></div>
+    {% if detail %}
+    <h1>{{ detail.album }}</h1>
+    <p class="page-sub">
+      {{ detail.artist }}{% if detail.year %} · {{ detail.year }}{% endif %}{% if detail.label %} · {{ detail.label }}{% endif %}{% if detail.catalog %} · {{ detail.catalog }}{% endif %}
+    </p>
+    {% else %}
+    <h1>Album not found</h1>
+    <p class="page-sub">This folder may have been renamed, moved, or removed in a rescan since you got here. <a href="/library">Back to Library</a></p>
+    {% endif %}
+  </div>
+</div>
+
+{% if detail %}
+<div class="album-hero">
+  <div class="album-art-panel">
+    <div class="album-art-main">
+      {% if detail.art.front or detail.art.back %}
+        {% set initial_side = "front" if detail.art.front else "back" %}
+        <img src="/api/v1/library/art?folder={{ detail.folder | urlencode }}&side={{ initial_side }}"
+             alt="{{ detail.album }} cover" id="album-art-img" data-side="{{ initial_side }}">
+      {% else %}
+        <div class="album-art-placeholder" id="album-art-placeholder">♪</div>
+      {% endif %}
+    </div>
+    {% if detail.art.front and detail.art.back %}
+    <button type="button" class="btn btn-ghost btn-sm album-art-flip" id="album-art-flip"
+            data-folder="{{ detail.folder }}" data-showing="front">
+      ⟳ Show back cover
+    </button>
+    {% endif %}
+  </div>
+
+  <div class="album-info-panel">
+    <div class="album-badges">
+      {% if detail.enriched %}
+        <span class="badge badge-green">enriched</span>
+      {% elif detail.mapped %}
+        <span class="badge badge-blue">mapped</span>
+      {% else %}
+        <span class="badge badge-yellow">unmapped</span>
+      {% endif %}
+      {% if detail.media_format %}<span class="badge badge-source">{{ detail.media_format }}</span>{% endif %}
+      {% if detail.vgmdb_id %}<span class="badge badge-purple">vgmdb:{{ detail.vgmdb_id }}</span>{% endif %}
+      {% if detail.mb_release_id and not detail.mb_release_id.startswith("vgmdb-") %}
+        <span class="badge badge-source">mb:{{ detail.mb_release_id[:8] }}…</span>
+      {% endif %}
+    </div>
+
+    {% if detail.genres %}
+    <div class="album-section">
+      <div class="album-section-label">Genres &amp; Tags</div>
+      <div class="chip-row">
+        {% for g in detail.genres %}<span class="chip chip-static">{{ g }}</span>{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% for role, people in [("Composers", detail.composers), ("Performers", detail.performers), ("Arrangers", detail.arrangers), ("Lyricists", detail.lyricists)] %}
+      {% if people %}
+      <div class="album-section">
+        <div class="album-section-label">{{ role }}</div>
+        <div class="album-credit-list">{{ people | join(", ") }}</div>
+      </div>
+      {% endif %}
+    {% endfor %}
+
+    {% if detail.description %}
+    <div class="album-section">
+      <div class="album-section-label">About</div>
+      <p class="album-description">{{ detail.description }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<section>
+  <div class="section-label">
+    Tracklist ({{ detail.track_count }} track{{ "s" if detail.track_count != 1 else "" }}{% if detail.total_duration_seconds %}, {{ detail.total_duration_seconds | duration }}{% endif %})
+  </div>
+
+  {% if detail.tracks %}
+  <div class="tracklist">
+    {% set ns = namespace(current_disc=None) %}
+    {% for t in detail.tracks %}
+      {% if detail.disc_count > 1 and t.disc != ns.current_disc %}
+        {% set ns.current_disc = t.disc %}
+        <div class="disc-header">Disc {{ t.disc }}</div>
+      {% endif %}
+      <div class="track-row">
+        <span class="track-num">{{ t.track }}</span>
+        <span class="track-title">{{ t.title }}</span>
+        {% if t.composer %}<span class="track-composer">{{ t.composer }}</span>{% endif %}
+        <span class="track-duration">{{ t.duration_seconds | duration }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🗒</div>
+    No track data available — the files may be missing tags and there's no VGMDB or MusicBrainz mapping to fall back to.
+  </div>
+  {% endif %}
+</section>
+
+{% if detail.warnings %}
+<div class="album-warnings">
+  {% for w in detail.warnings %}<div class="album-warning">⚠ {{ w }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<p class="album-sources">
+  Data sourced from: {{ detail.sources | join(", ") if detail.sources else "file tags only" }}.
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/album_detail.js') }}" defer></script>
+{% endblock %}

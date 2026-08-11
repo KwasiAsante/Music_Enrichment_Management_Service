@@ -3,7 +3,8 @@
 Talks to the user's local ``vgmdb-api`` instance (configured via
 ``settings.vgmdb_url``). Three search endpoints — by free-text title, by
 catalog number, and by barcode — each returning a normalised list of
-:class:`VGMDBHint` dicts.
+:class:`VGMDBHint` dicts, plus :meth:`get_album` for the full raw payload
+of one album (used by :mod:`app.core.album_details`).
 
 The local vgmdb-api search endpoint is path-based, e.g.::
 
@@ -112,3 +113,30 @@ class VGMDBClient:
         hints = self._search_albums(barcode, limit=limit)
         exact = [h for h in hints if h.get("barcode") == barcode]
         return exact or hints
+
+    def get_album(self, vgmdb_id: str) -> dict | None:
+        """Fetch the full raw album payload for one VGMDB id — the same
+        shape :mod:`app.beets_plugins.VGMplug` calls ``albuminfo``
+        (``names``, ``discs``/``tracks``, credit-role lists like
+        ``composers``/``performers``/``arrangers``, ``picture_full``,
+        ``category``, etc). Used by :mod:`app.core.album_details` to
+        supplement whatever's missing from a file's own tags — this
+        module doesn't interpret the shape at all, just fetches it.
+
+        Returns ``None`` on any failure (network, HTTP, malformed JSON,
+        unknown id) rather than raising, same convention as the search
+        methods — callers should treat that as "no VGMDB data available".
+        """
+        if not vgmdb_id or vgmdb_id == "skip":
+            return None
+        url = f"{self._base}/album/{quote(str(vgmdb_id), safe='')}"
+        try:
+            r = httpx.get(url, params={"format": "json"}, timeout=self._timeout)
+            r.raise_for_status()
+            return r.json()
+        except httpx.HTTPError as exc:
+            log.warning("vgmdb album %s fetch failed: %s", vgmdb_id, exc)
+            return None
+        except ValueError as exc:
+            log.warning("vgmdb album %s returned invalid JSON: %s", vgmdb_id, exc)
+            return None

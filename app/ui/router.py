@@ -30,6 +30,11 @@ these are top-level paths so they read naturally in a browser
                         group-by-artist are client-only preferences (saved
                         to localStorage) applied after load; further
                         filtering/pagination live via ``static/js/library.js``.
+* ``GET /library/album`` — One album's full detail view. Real data:
+                        :func:`app.api.library.album_detail` (tags from the
+                        files themselves, supplemented by VGMDB/MusicBrainz).
+                        Server-rendered — no client-side fetch, since the
+                        whole page is just one album's static-for-now data.
 * ``GET /logs``      — Real data: :func:`app.api.logs.list_logs` (first
                         100 rows, unfiltered). Filtering lives via
                         ``static/js/logs.js``.
@@ -53,7 +58,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 from app.api import library as library_api
@@ -191,6 +196,26 @@ def library_page(
             "view": view, "artist_q": artist or "", "folder_q": folder or "",
             "source_q": source or "", "page": page,
         },
+    )
+
+
+# ── GET /library/album ──────────────────────────────────────────────────────
+@router.get("/library/album", response_class=HTMLResponse)
+def album_detail_page(request: Request, folder: str = Query(...)) -> HTMLResponse:
+    """One album's detail view. Reuses
+    :func:`app.api.library.album_detail` directly — a 404 there (unknown
+    folder) just renders the page in a "not found" state rather than a
+    hard error, since the most likely cause is a stale link (the folder
+    got rescanned away) rather than anything the person did wrong.
+    """
+    try:
+        detail = library_api.album_detail(folder=folder)
+    except HTTPException:
+        detail = None
+    return templates.TemplateResponse(
+        request,
+        "album_detail.html",
+        {"folder": folder, "detail": detail},
     )
 
 

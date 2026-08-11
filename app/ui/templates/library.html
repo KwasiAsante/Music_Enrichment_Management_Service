@@ -69,7 +69,7 @@
   {% if view == 'skipped' %}
   <div class="results" id="album-list">
     {% for s in skipped %}
-    <div class="result-card">
+    <a class="result-card" href="/library/album?folder={{ s.folder | urlencode }}">
       <div class="info">
         <div class="info-title">{{ s.artist }} — {{ s.album }}</div>
         <div class="info-meta">
@@ -78,7 +78,7 @@
           <span>vgmdb:{{ s.vgmdb_id }}</span>
         </div>
       </div>
-    </div>
+    </a>
     {% else %}
     <div class="empty">
       <div class="empty-icon">✓</div>
@@ -89,7 +89,7 @@
   {% else %}
   <div class="results" id="album-list">
     {% for a in page.albums %}
-    <div class="result-card">
+    <a class="result-card" href="/library/album?folder={{ a.folder | urlencode }}">
       <div class="info">
         <div class="info-title">{{ a.artist }} — {{ a.album }}</div>
         <div class="info-meta">
@@ -103,7 +103,7 @@
           <span>{{ a.folder }}</span>
         </div>
       </div>
-    </div>
+    </a>
     {% else %}
     <div class="empty">
       <div class="empty-icon">🗒</div>

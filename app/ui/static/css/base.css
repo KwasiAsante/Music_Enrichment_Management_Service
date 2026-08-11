@@ -114,6 +114,7 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
   padding: 14px 18px; display: flex; align-items: center; gap: 14px;
   transition: border-color 0.15s, background 0.15s; position: relative;
+  text-decoration: none; color: inherit;
 }
 .result-card:hover { border-color: var(--border2); background: #161921; }
 .info { flex: 1; min-width: 0; }
@@ -371,6 +372,67 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 
 .empty { text-align: center; padding: 40px 0; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; }
 .empty-icon { font-size: 28px; margin-bottom: 10px; }
+
+/* ── Album detail page ───────────────────────────────────────────────────── */
+
+.eyebrow-back { color: inherit; text-decoration: none; }
+.eyebrow-back:hover { color: var(--text); text-decoration: underline; }
+
+.album-hero { display: grid; grid-template-columns: 260px 1fr; gap: 32px; margin-bottom: 36px; }
+.album-art-panel { display: flex; flex-direction: column; gap: 10px; }
+.album-art-main {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.album-art-main img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.album-art-placeholder {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 48px; color: var(--border2);
+}
+.album-art-flip { align-self: stretch; justify-content: center; }
+
+.album-info-panel { min-width: 0; }
+.album-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.album-section { margin-bottom: 18px; }
+.album-section:last-child { margin-bottom: 0; }
+.album-section-label {
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.album-credit-list { font-size: 14px; line-height: 1.6; }
+.album-description { font-size: 13px; color: var(--muted); line-height: 1.65; max-width: 640px; }
+.chip-static { padding: 5px 12px; }
+
+.tracklist { display: flex; flex-direction: column; }
+.disc-header {
+  font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em; padding: 16px 0 8px;
+}
+.disc-header:first-child { padding-top: 0; }
+.track-row {
+  display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 8px;
+  transition: background 0.15s;
+}
+.track-row:hover { background: var(--surface); }
+.track-num {
+  font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); width: 24px;
+  text-align: right; flex-shrink: 0;
+}
+.track-title { flex: 1; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-composer { font-size: 12px; color: var(--muted); flex-shrink: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-duration { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); flex-shrink: 0; width: 44px; text-align: right; }
+
+.album-warnings { margin-top: 24px; display: flex; flex-direction: column; gap: 6px; }
+.album-warning {
+  font-size: 12px; color: var(--warn); background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2); border-radius: 8px; padding: 8px 12px;
+}
+.album-sources { margin-top: 16px; font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+@media (max-width: 720px) {
+  .album-hero { grid-template-columns: 1fr; }
+  .album-art-panel { max-width: 320px; }
+}
 
 /* Visible keyboard focus for accessibility */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
