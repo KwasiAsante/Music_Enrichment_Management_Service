@@ -24,9 +24,16 @@ env:
 
 jobs:
   # Fails fast on an obviously broken build before spending time on a
-  # multi-arch image build — mainly catches import-time errors (bad syntax,
-  # a genuinely missing dependency) that `docker build` alone would only
-  # surface much later, deeper into the layer cache.
+  # multi-arch image build. The import check catches the "doesn't even
+  # start" case in under a second with an unambiguous error; the test
+  # suite catches everything else pytest's fixtures cover (see
+  # tests/conftest.py's docstring for how they isolate against this
+  # app's module-level settings/store singletons) — routing, auth
+  # gating, the settings override/restart flow, cover-art format
+  # parsing, the VGMDB/MusicBrainz aggregator's failure handling, and
+  # more. Neither needs a real .env — tests/conftest.py disables .env
+  # loading for the whole run precisely so this doesn't depend on
+  # whatever a contributor's local checkout happens to contain.
   sanity-check:
     runs-on: ubuntu-latest
     steps:
@@ -37,8 +44,8 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies (including test-only)
+        run: pip install -r requirements-dev.txt
 
       - name: Install the custom VGMDB beets plugin
         # Mirrors what the Dockerfile does — beets discovers plugins via
@@ -54,6 +61,9 @@ jobs:
           WEB_UI_PASS: sanity-check
           APP_DATA_DIR: /tmp/sanity-data
         run: python -c "import app.main; print('import OK:', app.main.app.title)"
+
+      - name: Run test suite
+        run: pytest --cov=app --cov-report=term-missing
 
   build-and-push:
     needs: sanity-check

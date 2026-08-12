@@ -132,6 +132,19 @@ Docker isn't required — everything in `Dockerfile` beyond installing python pa
 
 What you lose by skipping Docker: process supervision (`tini`, `restart:unless-stopped`), the isolated filesystem, and not needing `ffmpeg`/beets installed on your actual machine. Fine for local development; the container is still what's meant for actually running this day to day.
 
+## Running tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest --cov=app --cov-report=term-missing   # -q for less output, --cov flags optional
+```
+
+No `.env`, real `beet` binary, or network access needed — `tests/conftest.py` disables `.env` loading for the whole run and isolates each test's data/music directories, so the suite is reproducible on a fresh clone or in CI exactly like it runs here. This is also enforced: every push and PR runs the full suite via `.github/workflows/docker-publish.yml`'s `sanity-check` job before an image ever gets built.
+
+What's *not* covered: the actual beets/VGMDB tagging pipeline (`app/core/beets_enricher.py`), the library filesystem scanner, and Lidarr path-fixing logic beyond their request-level no-op branches — all three need a real `beet` binary and a populated library to assert anything meaningful about, which is integration-test territory rather than something worth mocking three layers deep. Everything else — routing, auth, the settings override/restart flow, cover-art parsing across formats, the VGMDB/MusicBrainz aggregator's failure handling, mapping CRUD/import/export — has real coverage.
+
+If you're adding a feature, the fixtures in `tests/conftest.py` are worth reading first — this app has a couple of module-level singletons (`app.config.settings`, `app.storage.json_store.store`) that don't isolate the way you'd expect from a naive "just set an env var" test, and the docstring there explains why and what the right pattern is.
+
 ## Web UI
 
 Eight pages, server-rendered (Jinja2 + vanilla JS, no build step), all behind
