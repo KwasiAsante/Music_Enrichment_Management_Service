@@ -12,9 +12,13 @@
 <script src="{{ url_for('static', path='js/url-base.js') }}"></script>
 <script>
   // Runs synchronously, before the sidebar markup below is parsed, so a
-  // previously-collapsed sidebar doesn't flash open on every page load.
+  // returning visitor's saved sidebar/theme preference doesn't flash the
+  // default (expanded, dark) before switching a moment later.
   if (localStorage.getItem('sidebar_collapsed') === '1') {
     document.documentElement.classList.add('sidebar-collapsed');
+  }
+  if (localStorage.getItem('theme') === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
   }
 </script>
 
@@ -47,6 +51,9 @@
   </div>
   <div class="sidebar-footer">
     <span class="status-dot"></span><span class="sidebar-footer-text">Container healthy — v{{ app_version | default('1.0.0') }}</span>
+    <button type="button" id="theme-toggle" class="theme-toggle" title="Switch to light theme" aria-label="Switch to light theme">
+      <span class="theme-toggle-icon">☾</span>
+    </button>
   </div>
 </nav>
 
@@ -58,6 +65,7 @@
 
 <script src="{{ url_for('static', path='js/tips.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/sidebar.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/theme.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

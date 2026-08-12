@@ -89,3 +89,14 @@ def test_album_detail_not_found_is_graceful(client: TestClient, auth):
     r = client.get("/library/album", params={"folder": "Nope/Nope"}, auth=auth)
     assert r.status_code == 200
     assert "Album not found" in r.text
+
+
+def test_settings_page_send_test_only_on_discord_webhook_fields(client: TestClient, auth):
+    r = client.get("/settings", auth=auth)
+    text = r.text
+
+    assert text.count('data-test-key="discord_webhook_') == 4
+    assert text.count("Send Test") == 4
+    # a non-webhook secret field (e.g. lidarr_api_key) must not get one
+    assert 'data-test-key="lidarr_api_key"' not in text
+    assert 'id="test-result-discord_webhook_artist"' in text

@@ -480,4 +480,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .settings-toggle { padding: 8px 0; }
 
+.settings-input-row { display: flex; gap: 8px; align-items: center; }
+.settings-input-row input { flex: 1; min-width: 0; }
+.settings-test-btn { flex-shrink: 0; white-space: nowrap; }
+.settings-test-result {
+  margin-top: 6px; font-size: 11px; display: flex; align-items: center; gap: 6px;
+}
+.settings-test-result:empty { display: none; }
+
 .settings-actions { display: flex; justify-content: flex-end; padding-top: 8px; margin-bottom: 40px; }

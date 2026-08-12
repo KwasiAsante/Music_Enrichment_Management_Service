@@ -72,3 +72,20 @@ class SettingsUpdateResult(BaseModel):
 
 class RestartResult(BaseModel):
     status: str
+
+
+class TestNotificationRequest(BaseModel):
+    """Body for ``POST /settings/test-notification``."""
+
+    key: str = Field(description="Which Discord webhook field to test, e.g. 'discord_webhook_artist'.")
+    url: str | None = Field(
+        default=None,
+        description="The URL currently in that field's input box, even if "
+        "unsaved — lets someone verify a webhook before hitting Save. "
+        "Blank/omitted falls back to whatever's currently configured.",
+    )
+
+
+class TestNotificationResult(BaseModel):
+    ok: bool
+    message: str = Field(description="Human-readable result, shown next to the Send Test button either way.")

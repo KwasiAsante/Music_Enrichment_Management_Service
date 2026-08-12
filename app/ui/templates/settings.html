@@ -53,10 +53,19 @@
               {% endfor %}
             </select>
           {% elif field.field_type == "password" %}
+            {% if field.key.startswith("discord_webhook_") %}
+            <div class="settings-input-row">
+              <input type="password" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="password"
+                     placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
+                     autocomplete="new-password">
+              <button type="button" class="btn btn-ghost btn-sm settings-test-btn" data-test-key="{{ field.key }}">Send Test</button>
+            </div>
+            <div class="settings-test-result" id="test-result-{{ field.key }}"></div>
+            {% else %}
             <input type="password" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="password"
                    placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
                    autocomplete="new-password">
-          {% else %}
+            {% endif %}
             <input type="text" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="text" value="{{ field.value or '' }}">
           {% endif %}
         </div>

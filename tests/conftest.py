@@ -1,8 +1,8 @@
 """Shared fixtures.
 
 The one non-obvious thing every test in this suite relies on is
-`isolated_env` below, so it's worth spelling out why it looks the way it
-does.
+`isolated_env` (and, underneath it, `_settings_at_class_defaults`) below,
+so it's worth spelling out why they look the way they do.
 
 `app.config.settings` is a single module-level instance, imported by name
 (`from app.config import settings`) in roughly a dozen other modules.
@@ -16,7 +16,7 @@ code, assert — doesn't isolate anything here: by the time a test runs,
 imported once for the whole test session, so a fresh env var doesn't
 retroactively change already-constructed singletons.
 
-What *does* work, and is what `isolated_env` does: mutate the existing
+What *does* work, and is what the fixtures below do: mutate the existing
 singleton objects' attributes in place, rather than trying to replace
 them. Every module holds a reference to the *same* `settings`/`store`
 object, so an in-place attribute change is visible everywhere
@@ -24,6 +24,29 @@ immediately — this is the standard pattern for isolating tests around a
 shared singleton, and it's why `monkeypatch` (which reverts everything
 automatically at test teardown) rather than manual mutation is used
 throughout.
+
+A real, initially-missed subtlety this file used to get wrong: `Settings`
+reads `.env` (relative to cwd) by default, and `pytest_configure` used to
+try disabling that by setting `Settings.model_config["env_file"] = None`.
+That *looks* right but doesn't actually work for the module-level
+`settings` singleton — this file's own top-level `from app.config import
+Settings, settings` runs (constructing that singleton, reading whatever
+.env exists on disk at that moment) *before* pytest ever calls the
+pytest_configure hook, since Python executes a module's imports at load
+time, ahead of any hook function pytest goes on to invoke. So the flag
+only ever affected *fresh* `Settings()` constructions made later
+elsewhere (e.g. inside `update_settings`'s validate-before-save step) —
+the shared singleton itself stayed built from real `.env` content the
+whole time. Caught when a test that assumed `discord_webhook_artist`
+defaulted to empty instead hit a real (leftover test) Discord webhook
+URL from this checkout's own `.env` and got back a genuine HTTP 403.
+
+`_settings_at_class_defaults` below is the actual fix: reset every field
+on the shared singleton to its true class-declared default —
+`Settings.model_construct()` builds an instance from field defaults
+alone, bypassing env vars and `.env` entirely, so it's a reliable source
+of "what this field is with zero external influence" — before
+`isolated_env`/`auth_credentials` layer their own specific values on top.
 """
 
 from __future__ import annotations
@@ -40,17 +63,11 @@ from app.storage.json_store import store
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Runs once, before any test collection/execution.
-
-    Settings reads `.env` (relative to cwd) by default — fine for the
-    running app, but it means every `Settings()` construction during a
-    test run would otherwise pick up whatever this particular checkout's
-    local `.env` happens to contain (timezone, cron schedules, etc.),
-    silently making the suite depend on machine-specific state instead
-    of the fixtures below. Disabled for the whole test session so every
-    test's configuration comes only from defaults plus what a fixture
-    explicitly sets — reproducible on a fresh clone or in CI with no
-    `.env` file at all.
+    """Belt-and-suspenders: still disables `.env` loading for any *fresh*
+    `Settings()` construction a test or the app code makes during the
+    run (the module-level singleton itself is handled by
+    `_settings_at_class_defaults` below, not this — see this file's
+    docstring for why those are two different problems).
     """
     Settings.model_config["env_file"] = None
 
@@ -61,7 +78,29 @@ class IsolatedEnv(NamedTuple):
 
 
 @pytest.fixture
-def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> IsolatedEnv:
+def _settings_at_class_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reset every field on the shared `settings` singleton to its true
+    class default, so a test starts from known, reproducible values
+    regardless of whatever real `.env` file happens to exist wherever
+    the suite is being run — see this file's docstring for why this is
+    necessary and `pytest_configure` alone doesn't cover it.
+
+    A dependency of `isolated_env`/`auth_credentials` (both of which
+    nearly every test uses via the `client` fixture) rather than a
+    standalone `autouse` fixture, so it's guaranteed to run before either
+    of those layer their own specific values on top — relying on
+    autouse-vs-autouse ordering between independent fixtures isn't
+    something to lean on.
+    """
+    defaults = Settings.model_construct()
+    for field_name in Settings.model_fields:
+        monkeypatch.setattr(settings, field_name, getattr(defaults, field_name))
+
+
+@pytest.fixture
+def isolated_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _settings_at_class_defaults: None,
+) -> IsolatedEnv:
     """Give one test a private data dir, music dir, and JSON-store paths.
 
     Function-scoped deliberately — a fresh tmp_path per test is the
@@ -104,11 +143,19 @@ def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> IsolatedEnv
 
 
 @pytest.fixture
-def auth_credentials(monkeypatch: pytest.MonkeyPatch) -> tuple[str, str]:
+def auth_credentials(
+    monkeypatch: pytest.MonkeyPatch, _settings_at_class_defaults: None,
+) -> tuple[str, str]:
     """Deterministic, known-good web UI credentials for this test —
     mutating both the live singleton (most code paths) and the env var
     (anywhere a fresh `Settings()` gets constructed, e.g. the Settings
     page's validate-before-save step) so both stay consistent.
+
+    Depends on `_settings_at_class_defaults` explicitly — same as
+    `isolated_env` — even though neither fixture depends on the other:
+    both being downstream of that single, once-only reset is what
+    guarantees it can't run *between* them and clobber whichever one
+    happened to set its values first. See this file's docstring.
     """
     username, password = "testuser", "testpass123"
     monkeypatch.setattr(settings, "web_ui_user", username)

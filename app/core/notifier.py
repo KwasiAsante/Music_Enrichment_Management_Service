@@ -81,3 +81,36 @@ class Notifier:
         except httpx.HTTPError as exc:
             log.warning("discord webhook (%s) failed: %s", category, exc)
             return False
+
+    def send_test(self, url: str) -> tuple[bool, str]:
+        """Send a one-off test message to an arbitrary webhook URL — not
+        necessarily the one currently saved in settings. Backs the
+        Settings page's "Send Test" button, so a webhook can be verified
+        *before* saving it rather than waiting for a real event to
+        trigger it (or worse, finding out it was wrong only when a real
+        notification silently never arrives).
+
+        Unlike :meth:`send`, this reports back *why* it failed — a 401
+        vs. a timeout vs. "no URL at all" are different problems for
+        someone debugging a webhook, so the generic bool `send()` returns
+        isn't enough here.
+        """
+        url = (url or "").strip()
+        if not url or "PLACEHOLDER_ME" in url:
+            return False, "No webhook URL to test."
+
+        payload = {
+            "embeds": [{
+                "title": "Test notification",
+                "description": "This is a test message from Music Library Helper's Settings page.",
+                "color": _COLOUR_OK,
+            }]
+        }
+        try:
+            r = httpx.post(url, json=payload, timeout=self._timeout)
+            r.raise_for_status()
+            return True, "Discord accepted the test message — check the channel."
+        except httpx.HTTPStatusError as exc:
+            return False, f"Discord rejected it (HTTP {exc.response.status_code}) — check the URL is a valid webhook."
+        except httpx.HTTPError as exc:
+            return False, f"Request failed: {exc}"

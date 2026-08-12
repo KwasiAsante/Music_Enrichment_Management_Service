@@ -19,6 +19,12 @@ the same login as the web UI: nothing outside the Settings page itself
 has any reason to call it, and it can change credentials, disable login
 entirely, and restart the process, so the usual "external scripts can't
 present a login prompt" argument for leaving it open doesn't apply here.
+
+One endpoint is an exception to the "restart required" rule above:
+``POST /test-notification`` sends a real Discord message immediately,
+using whatever URL is currently in the browser (saved or not) — there's
+nothing to persist or restart for, it's just a way to verify a webhook
+works before committing to it.
 """
 
 from __future__ import annotations
@@ -35,6 +41,7 @@ from pydantic import ValidationError
 
 from app.config import Settings, settings
 from app.core import settings_store
+from app.core.notifier import Notifier
 from app.models.settings import (
     RestartResult,
     SettingField,
@@ -42,6 +49,8 @@ from app.models.settings import (
     SettingsResponse,
     SettingsUpdateRequest,
     SettingsUpdateResult,
+    TestNotificationRequest,
+    TestNotificationResult,
 )
 from app.storage import db
 from app.ui.auth import require_login
@@ -58,6 +67,15 @@ router = APIRouter(
 SECRET_FIELDS: frozenset[str] = frozenset({
     "lidarr_api_key", "prowlarr_api_key", "qbit_pass", "web_ui_pass",
     "github_token", "discord_webhook_artist", "discord_webhook_enrich",
+    "discord_webhook_mb_seed_dl", "discord_webhook_mb_seed_beets",
+})
+
+# The subset of SECRET_FIELDS that POST /test-notification will accept —
+# spelled out explicitly (rather than e.g. "any key containing
+# 'discord_webhook'") so this can't accidentally be tricked into treating
+# some other secret field as a webhook URL and POSTing it somewhere.
+DISCORD_WEBHOOK_FIELDS: frozenset[str] = frozenset({
+    "discord_webhook_artist", "discord_webhook_enrich",
     "discord_webhook_mb_seed_dl", "discord_webhook_mb_seed_beets",
 })
 
@@ -276,3 +294,25 @@ async def restart_app() -> RestartResult:
 
     asyncio.create_task(_do_restart())
     return RestartResult(status="restarting")
+
+
+# ── POST /settings/test-notification ────────────────────────────────────
+@router.post("/test-notification", response_model=TestNotificationResult)
+def test_notification(req: TestNotificationRequest) -> TestNotificationResult:
+    """Send a one-off test message to a Discord webhook — the URL
+    currently typed into that field's input, even if it hasn't been
+    saved yet, or (if that's blank) whatever's currently configured.
+    Lets a webhook be verified without waiting for a real event to
+    trigger it, or saving a value that turns out to be wrong.
+    """
+    if req.key not in DISCORD_WEBHOOK_FIELDS:
+        raise HTTPException(400, f"{req.key!r} is not a Discord webhook field")
+
+    url = (req.url or "").strip() or getattr(settings, req.key, "")
+    ok, message = Notifier().send_test(url)
+
+    db.add_activity(
+        "settings", f"test notification ({req.key}): {'sent' if ok else 'failed'} — {message}",
+        level="info" if ok else "warning",
+    )
+    return TestNotificationResult(ok=ok, message=message)

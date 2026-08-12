@@ -7,6 +7,12 @@
  * state (overridden/pending pills, the restart banner) reflects reality
  * rather than trying to hand-sync client state after the fact.
  *
+ * Send Test (Discord webhook fields only): POSTs whatever's currently in
+ * that field's input to /api/v1/settings/test-notification — works
+ * before saving, so a webhook can be verified without committing to it
+ * or waiting for a real event to trigger it. If the input's blank, the
+ * backend falls back to whatever's already configured.
+ *
  * Restart: confirms, POSTs /api/v1/settings/restart (which schedules a
  * graceful SIGTERM ~0.5s out — see that endpoint for why), then polls
  * GET /health every second until it responds again (Docker's restart
@@ -21,6 +27,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('settings-form')?.addEventListener('submit', handleSave);
   document.getElementById('restart-btn')?.addEventListener('click', handleRestart);
+  document.querySelectorAll('.settings-test-btn').forEach((btn) => {
+    btn.addEventListener('click', () => handleTestNotification(btn));
+  });
 });
 
 async function handleSave(e) {
@@ -66,6 +75,36 @@ async function handleSave(e) {
     resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save Changes';
+  }
+}
+
+async function handleTestNotification(btn) {
+  const key = btn.dataset.testKey;
+  const input = document.getElementById(`field-${key}`);
+  const resultEl = document.getElementById(`test-result-${key}`);
+  const url = input ? input.value.trim() : '';
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  resultEl.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/v1/settings/test-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, url: url || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `request failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML = data.ok
+      ? `<span class="badge badge-green">sent</span> <span>${escapeHtml(data.message)}</span>`
+      : `<span class="badge badge-red">failed</span> <span>${escapeHtml(data.message)}</span>`;
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Test';
   }
 }
 
