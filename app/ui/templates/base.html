@@ -22,7 +22,15 @@
   }
 </script>
 
-<nav class="sidebar">
+<div class="mobile-topbar">
+  <button type="button" id="mobile-nav-toggle" class="mobile-nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
+    <span></span><span></span><span></span>
+  </button>
+  <span class="mobile-topbar-title">Music Library Helper</span>
+</div>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+<nav class="sidebar" id="sidebar">
   <div class="sidebar-brand">
     <div class="sidebar-brand-text">
       <div class="eyebrow">▸ Music Library Helper</div>
@@ -66,6 +74,7 @@
 <script src="{{ url_for('static', path='js/tips.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/sidebar.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/theme.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/mobile-nav.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

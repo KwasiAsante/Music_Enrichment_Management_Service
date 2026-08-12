@@ -103,6 +103,96 @@ def test_settings_page_send_test_only_on_discord_webhook_fields(client: TestClie
     assert 'id="test-result-discord_webhook_artist"' in text
 
 
+def test_theme_toggle_present_and_anti_fouc_ordering(client: TestClient, auth):
+    r = client.get("/", auth=auth)
+    text = r.text
+    assert 'id="theme-toggle"' in text
+    assert "js/theme.js" in text
+
+    script_pos = text.find("localStorage.getItem('theme')")
+    sidebar_pos = text.find('<nav class="sidebar"')
+    assert script_pos != -1 and sidebar_pos != -1
+    assert script_pos < sidebar_pos, "anti-FOUC theme script must precede sidebar markup"
+
+
+def test_light_theme_css_variables_defined(client: TestClient, auth):
+    """Regression test: the light theme's HTML/JS (button, toggle script)
+    shipped in an earlier pass without the matching CSS variable block —
+    clicking the toggle set data-theme="light" but nothing visually
+    changed, since no rule actually read that attribute. Covers both
+    that the override block exists and that every color variable :root
+    defines has a light-theme counterpart, so a future variable added to
+    one side can't silently be missing from the other.
+    """
+    css = Path("app/ui/static/css/base.css").read_text()
+
+    root_match = re.search(r":root\s*\{([\s\S]*?)\}", css)
+    light_match = re.search(r'html\[data-theme="light"\]\s*\{([\s\S]*?)\}', css)
+    assert root_match and light_match, "both :root and html[data-theme=light] blocks must exist"
+
+    non_color_vars = {"sidebar-w", "sidebar-w-collapsed"}
+    root_vars = {m for m in re.findall(r"--([a-z0-9-]+)\s*:", root_match.group(1))} - non_color_vars
+    light_vars = set(re.findall(r"--([a-z0-9-]+)\s*:", light_match.group(1)))
+
+    assert root_vars, "sanity check: :root should define some color variables"
+    assert root_vars == light_vars, (
+        f"variable mismatch between themes — missing from light: "
+        f"{root_vars - light_vars}, extra in light: {light_vars - root_vars}"
+    )
+
+    # No hardcoded color values should remain outside the two variable
+    # blocks — anything still hardcoded silently ignores the theme toggle.
+    body_without_var_blocks = css[light_match.end():]
+    for leaked_hex in ["#161921", "#e8eaf0 0%", "#6b9ef8"]:
+        assert leaked_hex not in body_without_var_blocks, f"{leaked_hex} still hardcoded outside the theme variables"
+
+
+def test_mobile_nav_markup_present(client: TestClient, auth):
+    r = client.get("/", auth=auth)
+    text = r.text
+    assert 'id="mobile-nav-toggle"' in text
+    assert 'id="sidebar-backdrop"' in text
+    assert 'class="mobile-topbar"' in text
+    assert 'js/mobile-nav.js' in text
+    assert 'id="sidebar"' in text
+    assert 'aria-controls="sidebar"' in text
+
+
+def test_mobile_breakpoint_covers_expected_rules():
+    """Structural check, not a rendered-layout one — jsdom doesn't
+    evaluate @media (max-width) against a settable viewport width the
+    way a real browser does (same limitation hit with CSS custom
+    properties elsewhere in this codebase), so "does the mobile drawer
+    actually look right at 375px" isn't something this suite can verify
+    directly. What it can verify: the rules that make it work are
+    actually present and correctly scoped inside the breakpoint, so a
+    future edit can't silently delete one without a test noticing.
+    """
+    css = Path("app/ui/static/css/base.css").read_text()
+    match = re.search(r"@media \(max-width: 860px\) \{([\s\S]*?)\n\}\n\n/\* ── Main content", css)
+    assert match, "860px mobile breakpoint block not found"
+    block = match.group(1)
+
+    for needle in [
+        # body must switch off flex-row on mobile — otherwise
+        # .mobile-topbar (a normal block, not an overlay like .sidebar)
+        # stays a row-direction flex sibling of .main instead of
+        # stacking above it, and body's default align-items:stretch
+        # pulls it to full viewport height. Real bug, caught from an
+        # actual screenshot: the hamburger+title rendered as a tall
+        # empty column on the left instead of a top bar.
+        "body { display: block",
+        ".mobile-topbar {\n    display: flex",
+        ".sidebar {\n    position: fixed",
+        "transform: translateX(-100%)",
+        "html.mobile-nav-open .sidebar { transform: translateX(0)",
+        "#sidebar-toggle { display: none",
+        ".sidebar-backdrop {\n    display: block",
+        "html.mobile-nav-open .sidebar-backdrop { opacity: 1; pointer-events: auto",
+    ]:
+        assert needle in block, f"missing expected mobile rule: {needle!r}"
+
+
 def test_settings_page_has_full_backup_download_link(client: TestClient, auth):
     r = client.get("/settings", auth=auth)
     assert 'href="/api/v1/backup/export"' in r.text

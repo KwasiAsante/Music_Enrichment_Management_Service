@@ -74,3 +74,11 @@ h1 { font-size: clamp(28px, 4vw, 46px); }
 
 .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 420px) {
+  /* .search-wrap already flex-shrinks the input on any narrow screen —
+     this only kicks in on genuinely small phones where even that leaves
+     the input too cramped to comfortably type into next to the button. */
+  .search-row { flex-direction: column; align-items: stretch; }
+  .search-row .btn { width: 100%; }
+}

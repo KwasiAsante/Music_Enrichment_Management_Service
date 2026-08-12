@@ -4,7 +4,26 @@
   --bg: #0d0f14; --surface: #13161d; --border: #1e2330; --border2: #2a3045;
   --accent: #4f8ef7; --accent2: #7c5cfc; --success: #34d399;
   --warn: #fbbf24; --danger: #f87171; --text: #e8eaf0; --muted: #5a6278; --subtle: #2e3447;
+  --hover-bg: #161921;
+  --btn-primary-hover: #6b9ef8;
+  --h1-gradient: linear-gradient(135deg, #e8eaf0 0%, #7c8aaa 100%);
   --sidebar-w: 220px; --sidebar-w-collapsed: 68px;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────
+   Opt-in via the theme-toggle button in the sidebar footer (see
+   static/js/theme.js) — dark (the :root above) stays the default.
+   Applied via [data-theme="light"] on <html>, set synchronously in
+   base.html before the sidebar renders so there's no flash on load.
+   Same variable names as :root, different values — every rule elsewhere
+   that already reads var(--...) picks this up automatically. */
+html[data-theme="light"] {
+  --bg: #f7f8fb; --surface: #ffffff; --border: #e2e5ec; --border2: #cdd2dc;
+  --accent: #2563eb; --accent2: #7c3aed; --success: #059669;
+  --warn: #d97706; --danger: #dc2626; --text: #1a1d29; --muted: #6b7280; --subtle: #eef0f4;
+  --hover-bg: #f0f2f6;
+  --btn-primary-hover: #3f7ae8;
+  --h1-gradient: linear-gradient(135deg, #1a1d29 0%, #4a5578 100%);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -66,6 +85,72 @@ html.sidebar-collapsed .nav-item { justify-content: center; padding: 10px; }
 html.sidebar-collapsed .sidebar-footer { justify-content: center; padding: 14px 0; }
 html.sidebar-collapsed .sidebar-footer .status-dot { margin-right: 0; }
 
+/* ── Mobile top bar + off-canvas sidebar ─────────────────────────────────
+   Below 860px, .sidebar stops being a flex sibling of .main (fixed
+   positioning takes it out of flow regardless of body's own display) and
+   becomes a full-height drawer hidden off-screen by default, toggled via
+   html.mobile-nav-open (see static/js/mobile-nav.js). The desktop
+   collapsed-icon-only state is a different concept from "drawer open or
+   closed" — the rules below make the drawer always show full labels
+   regardless of whatever the desktop collapse preference happens to be
+   persisted as, and hide the (meaningless in drawer mode) collapse
+   button entirely. */
+
+.mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  /* body is `display: flex` (row) at the base level so .sidebar and
+     .main sit side by side on desktop. .sidebar gets pulled out of that
+     flow below via position:fixed, but .mobile-topbar does NOT — it's a
+     normal block, not an overlay — so left as a flex row, .mobile-topbar
+     and .main would sit side by side instead of stacked, with
+     body's default align-items:stretch pulling the topbar to full
+     viewport height. Switching to block layout here is what actually
+     makes them stack in DOM order like a normal page. */
+  body { display: block; }
+
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 30;
+    background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px;
+  }
+  .mobile-topbar-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; }
+
+  .mobile-nav-toggle {
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    width: 32px; height: 32px; background: transparent; border: 1px solid var(--border2);
+    border-radius: 7px; cursor: pointer; padding: 0 7px; flex-shrink: 0;
+  }
+  .mobile-nav-toggle span { display: block; width: 100%; height: 2px; background: var(--text); border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
+  html.mobile-nav-open .mobile-nav-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  html.mobile-nav-open .mobile-nav-toggle span:nth-child(2) { opacity: 0; }
+  html.mobile-nav-open .mobile-nav-toggle span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+  .sidebar {
+    position: fixed; top: 0; left: 0; height: 100vh; width: 260px !important;
+    transform: translateX(-100%); z-index: 50; transition: transform 0.25s ease;
+  }
+  html.mobile-nav-open .sidebar { transform: translateX(0); }
+
+  html.sidebar-collapsed .sidebar-brand-text,
+  html.sidebar-collapsed .nav-item .label,
+  html.sidebar-collapsed .sidebar-footer-text { display: block; }
+  html.sidebar-collapsed .sidebar-brand { padding: 22px 16px 18px; justify-content: flex-start; }
+  html.sidebar-collapsed .nav-item { justify-content: flex-start; padding: 10px 12px; }
+  html.sidebar-collapsed .sidebar-footer { justify-content: flex-start; padding: 14px 20px; }
+  html.sidebar-collapsed .sidebar-footer .status-dot { margin-right: 6px; }
+  #sidebar-toggle { display: none; }
+
+  .sidebar-backdrop {
+    display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+  }
+  html.mobile-nav-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
+
+  .main { width: 100%; }
+  .page { padding: 24px 16px 60px; }
+}
+
 /* ── Main content ────────────────────────────────────────────────────── */
 
 .main { flex: 1; position: relative; z-index: 1; min-width: 0; }
@@ -73,7 +158,7 @@ html.sidebar-collapsed .sidebar-footer .status-dot { margin-right: 0; }
 
 .page-header { margin-bottom: 32px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
-h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; letter-spacing: -0.02em; background: linear-gradient(135deg, #e8eaf0 0%, #7c8aaa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; letter-spacing: -0.02em; background: var(--h1-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .page-sub { margin-top: 6px; color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; }
 
 .section-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
@@ -85,7 +170,7 @@ section + section { margin-top: 36px; }
 button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; border: none; outline: none; transition: all 0.15s; }
 .btn { border-radius: 8px; padding: 11px 20px; font-size: 13px; }
 .btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: #6b9ef8; }
+.btn-primary:hover { background: var(--btn-primary-hover); }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-success { background: var(--success); color: #0a2218; }
 .btn-success:hover { filter: brightness(1.1); }
@@ -99,8 +184,9 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 @media (max-width: 800px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .stat-grid { grid-template-columns: 1fr; } }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; display: block; text-decoration: none; color: inherit; transition: border-color 0.15s, background 0.15s; }
-.stat-card:hover { border-color: var(--border2); background: #161921; }
+.stat-card:hover { border-color: var(--border2); background: var(--hover-bg); }
 .stat-value { font-size: 28px; font-weight: 800; letter-spacing: -0.01em; }
 .stat-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
 .stat-card.accent-success .stat-value { color: var(--success); }
@@ -116,13 +202,25 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
   transition: border-color 0.15s, background 0.15s; position: relative;
   text-decoration: none; color: inherit;
 }
-.result-card:hover { border-color: var(--border2); background: #161921; }
+.result-card:hover { border-color: var(--border2); background: var(--hover-bg); }
 .info { flex: 1; min-width: 0; }
 .info-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
 .info-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .row-actions input { background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 7px 10px; width: 110px; outline: none; }
 .row-actions input:focus { border-color: var(--accent); }
+
+@media (max-width: 580px) {
+  /* List-mode result rows (Mappings' Search/Set/Skip buttons, mainly) —
+     grid-mode cards already stack in a column regardless (see
+     .results.grid-mode .result-card elsewhere), so this only changes
+     anything for the list layout where a checkbox + title + action
+     buttons all sitting on one line gets cramped on a phone. Letting
+     .row-actions drop to its own full-width line gives the buttons room
+     without truncating the title down to nothing first. */
+  .result-card { flex-wrap: wrap; }
+  .result-card .row-actions { flex: 1 1 100%; justify-content: flex-start; margin-top: 4px; }
+}
 
 /* ── Badges ──────────────────────────────────────────────────────────── */
 
@@ -188,6 +286,7 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .bulk-toolbar {
   display: flex; align-items: center; gap: 10px; background: var(--subtle);
   border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 #bulk-count, .bulk-toolbar span[id$="-count"] {
   font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); font-weight: 700; margin-right: 4px;
@@ -380,6 +479,15 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .lt { color: var(--muted); flex-shrink: 0; }
 .lok { color: var(--success); } .lerr { color: var(--danger); } .linfo { color: var(--accent); } .lwarn { color: var(--warn); }
 
+@media (max-width: 640px) {
+  /* Log messages are unpredictable length (file paths, error text) and
+     .log-line doesn't wrap by default — without this, a long message
+     just pushes the line past the viewport edge instead of wrapping,
+     forcing horizontal scroll on the whole page. */
+  .log-line { flex-wrap: wrap; }
+  .log-line > span:last-child { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+}
+
 /* ── Progress bar ────────────────────────────────────────────────────── */
 
 .progress-track { background: var(--subtle); border-radius: 20px; height: 8px; overflow: hidden; margin: 10px 0; }
@@ -447,6 +555,12 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 @media (max-width: 720px) {
   .album-hero { grid-template-columns: 1fr; }
   .album-art-panel { max-width: 320px; }
+  /* Per-track composer is supplementary — the album-level "Composers"
+     section above the tracklist already has it. Dropping it here on
+     narrow screens is what actually lets .track-title (the useful part)
+     keep enough width to be readable instead of ellipsis-ing after two
+     or three characters. */
+  .track-composer { display: none; }
 }
 
 /* Visible keyboard focus for accessibility */
@@ -504,3 +618,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .settings-test-result:empty { display: none; }
 
 .settings-actions { display: flex; justify-content: flex-end; padding-top: 8px; margin-bottom: 40px; }
+
+@media (max-width: 640px) {
+  .settings-row { grid-template-columns: 1fr; gap: 8px; }
+}
