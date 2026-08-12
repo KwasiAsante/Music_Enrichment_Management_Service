@@ -6,6 +6,7 @@ prefixes every internal link when set.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -100,3 +101,23 @@ def test_settings_page_send_test_only_on_discord_webhook_fields(client: TestClie
     # a non-webhook secret field (e.g. lidarr_api_key) must not get one
     assert 'data-test-key="lidarr_api_key"' not in text
     assert 'id="test-result-discord_webhook_artist"' in text
+
+
+def test_settings_page_has_full_backup_download_link(client: TestClient, auth):
+    r = client.get("/settings", auth=auth)
+    assert 'href="/api/v1/backup/export"' in r.text
+    assert "Download Everything" in r.text
+
+
+def test_backup_download_link_respects_url_base(client: TestClient, auth):
+    # A hardcoded href here would silently break the download once the
+    # app is served from a subpath — same class of bug the rest of the
+    # app's URL_BASE support was built to catch. Checked against the
+    # template source directly rather than a live Mount()-wrapped
+    # request: reconstructing that whole url_base + Mount() +
+    # module-reload chain inside a single test is exactly the kind of
+    # fragile, hard-to-debug-later machinery not worth introducing just
+    # to check one href line follows the same `{{ url_base }}` pattern
+    # every other internal link in this codebase already does.
+    template = Path("app/ui/templates/settings.html").read_text()
+    assert 'href="{{ url_base }}/api/v1/backup/export"' in template

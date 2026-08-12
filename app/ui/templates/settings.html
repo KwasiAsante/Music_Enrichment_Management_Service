@@ -10,6 +10,18 @@
   </div>
 </div>
 
+<section class="backup-panel">
+  <div class="section-label">Full Backup</div>
+  <div class="backup-row">
+    <a class="btn btn-ghost btn-sm" href="{{ url_base }}/api/v1/backup/export" download>⇩ Download Everything</a>
+  </div>
+  <p class="settings-help">
+    Every JSON state file, the SQLite database (jobs + activity log), and a manifest, bundled as one ZIP.
+    Looking for just the VGMDB mapping decisions on their own? Use <a href="{{ url_base }}/mappings">Mappings → Backup &amp; Restore</a> instead — this covers everything else too (library index, enriched/skipped/excluded records, settings overrides).
+    Secrets are never included — API keys, passwords, and Discord webhook URLs are redacted to a plain "was this configured" marker, not their real values.
+  </p>
+</section>
+
 <div class="tip-banner settings-note">
   <span class="tip-banner-icon">ℹ</span>
   <span class="tip-banner-text">

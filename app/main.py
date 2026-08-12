@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__, scheduler
-from app.api import artist, enrich, library, logs, mapping, mb, picard, proxy, settings as settings_api
+from app.api import artist, backup, enrich, library, logs, mapping, mb, picard, proxy, settings as settings_api
 from app.config import settings
 from app.storage import db
 from app.ui import router as ui
@@ -103,6 +103,7 @@ app.include_router(proxy.router)
 app.include_router(enrich.router)
 app.include_router(logs.router)
 app.include_router(settings_api.router)
+app.include_router(backup.router)
 app.include_router(ui.router)
 
 
