@@ -61,8 +61,21 @@
   </div>
 </div>
 
+<div class="bulk-toolbar" id="bulk-toolbar" style="display:none;">
+  <span id="bulk-count">0 selected</span>
+  <button type="button" class="btn btn-primary btn-sm" id="bulk-reenrich-btn">Re-enrich Selected</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="bulk-exclude-btn">Exclude Artist(s)</button>
+  <button type="button" class="btn btn-ghost btn-sm" id="bulk-clear-btn">Clear</button>
+</div>
+<div id="bulk-result" class="import-result"></div>
+
 <section>
   <div class="section-label">
+    {% if view != 'skipped' %}
+    <label class="row-select" title="Select all visible">
+      <input type="checkbox" id="select-all-library">
+    </label>
+    {% endif %}
     <span id="section-label-text">{{ 'Skipped (low-confidence matches)' if view == 'skipped' else 'Albums' }}</span>
   </div>
 
@@ -89,7 +102,11 @@
   {% else %}
   <div class="results" id="album-list">
     {% for a in page.albums %}
-    <a class="result-card" href="{{ url_base }}/library/album?folder={{ a.folder | urlencode }}">
+    <a class="result-card" href="{{ url_base }}/library/album?folder={{ a.folder | urlencode }}"
+       data-mb-id="{{ a.mb_release_id or '' }}" data-artist="{{ a.artist }}" data-album="{{ a.album }}" data-folder="{{ a.folder }}">
+      <label class="row-select" onclick="event.stopPropagation()">
+        <input type="checkbox" class="js-row-select">
+      </label>
       <div class="info">
         <div class="info-title">{{ a.artist }} — {{ a.album }}</div>
         <div class="info-meta">

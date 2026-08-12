@@ -178,6 +178,21 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 }
 .excluded-form input[type="text"]:focus { border-color: var(--accent); }
 
+/* ── Bulk select (Mappings/Library multi-select toolbars) ─────────────────── */
+
+.row-select { display: inline-flex; align-items: center; flex-shrink: 0; cursor: pointer; }
+.row-select input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.row-select input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.35; }
+.result-card.result-card-selected { border-color: var(--accent); background: rgba(79,142,247,0.05); }
+
+.bulk-toolbar {
+  display: flex; align-items: center; gap: 10px; background: var(--subtle);
+  border: 1px solid var(--border2); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+}
+#bulk-count, .bulk-toolbar span[id$="-count"] {
+  font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); font-weight: 700; margin-right: 4px;
+}
+
 /* ── Library: view toolbar (group-by-artist toggle + layout switch) ────── */
 
 .view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }

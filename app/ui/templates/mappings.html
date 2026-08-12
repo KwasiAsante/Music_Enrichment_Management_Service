@@ -62,7 +62,21 @@
 </div>
 
 <section>
-  <div class="section-label">Unmapped Albums (<span class="js-unmapped-count">{{ unmapped | length }}</span>)</div>
+  <div class="section-label">
+    <label class="row-select" title="Select all">
+      <input type="checkbox" id="select-all-unmapped">
+    </label>
+    Unmapped Albums (<span class="js-unmapped-count">{{ unmapped | length }}</span>)
+  </div>
+
+  <div class="bulk-toolbar" id="bulk-toolbar" style="display:none;">
+    <span id="bulk-count">0 selected</span>
+    <button type="button" class="btn btn-danger-ghost btn-sm" id="bulk-skip-btn">Skip Selected</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="bulk-exclude-btn">Exclude Artist(s)</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="bulk-clear-btn">Clear</button>
+  </div>
+  <div id="bulk-result" class="import-result"></div>
+
   <div id="results-container">
     {% if unmapped %}
     <div class="results">
@@ -72,6 +86,9 @@
            data-artist="{{ item.artist }}"
            data-album="{{ item.album }}"
            data-folder="{{ item.folder }}">
+        <label class="row-select">
+          <input type="checkbox" class="js-row-select" {% if not item.mb_release_id %}disabled title="No MusicBrainz release id — can't be skipped"{% endif %}>
+        </label>
         <div class="info">
           <div class="info-title">{{ item.artist }} — {{ item.album }}</div>
           <div class="info-meta js-meta">

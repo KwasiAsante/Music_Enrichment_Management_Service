@@ -94,6 +94,47 @@ class DeleteMappingResult(BaseModel):
     dry_run: bool = False
 
 
+# ── POST /mapping/bulk-skip ─────────────────────────────────────────────────
+class BulkSkipItem(BaseModel):
+    """One album to skip — matches the fields an Unmapped/Library row
+    already carries client-side, so the frontend can build this straight
+    from what's already rendered without another round trip."""
+    mb_release_id: str
+    artist: str = ""
+    album: str = ""
+    folder: str = ""
+
+
+class BulkSkipRequest(BaseModel):
+    """Body for ``POST /mapping/bulk-skip``."""
+    items: list[BulkSkipItem] = Field(default_factory=list)
+
+
+class BulkSkipResult(BaseModel):
+    """Response from ``POST /mapping/bulk-skip``."""
+    skipped: list[str] = Field(description="mb_release_ids successfully marked as skipped.")
+    failed: list[dict] = Field(
+        default_factory=list,
+        description="Items that couldn't be processed: [{mb_release_id, error}].",
+    )
+
+
+# ── POST /mapping/bulk-exclude-artists ──────────────────────────────────────
+class BulkExcludeArtistsRequest(BaseModel):
+    """Body for ``POST /mapping/bulk-exclude-artists``. Shared by the
+    Mappings and Library pages' bulk-select toolbars."""
+    artists: list[str] = Field(default_factory=list)
+
+
+class BulkExcludeArtistsResult(BaseModel):
+    """Response from ``POST /mapping/bulk-exclude-artists``."""
+    added: list[str] = Field(description="Artists newly added to the exclusion list.")
+    already_excluded: list[str] = Field(
+        default_factory=list,
+        description="Artists that were already on the list — no-ops, not errors.",
+    )
+
+
 # ── excluded-artists CRUD ───────────────────────────────────────────────────
 class ExcludedArtistRequest(BaseModel):
     """Body for ``POST /mapping/excluded-artists``."""

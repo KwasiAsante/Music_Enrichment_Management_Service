@@ -58,6 +58,12 @@ let lastKind = null; // 'albums' | 'grouped' | 'skipped'
 // rather than accumulating stale entries as the artist list changes with
 // filters.
 const collapsedArtists = new Set();
+// Bulk-select state, keyed by `folder` (the one field guaranteed unique
+// per album, unlike mb_release_id which is blank for unmapped rows) ->
+// {artist, album}. Cleared on every full re-render for the same reason
+// Mappings' equivalent is — a selection made against one filtered view
+// shouldn't silently survive into a different one.
+const selectedLibrary = new Map();
 
 const VIEW_LABELS = {
   all: 'Albums',
@@ -70,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyLayoutButtons();
   document.getElementById('toggle-group').checked = state.groupByArtist;
   updateGroupControlsVisibility();
+  document.querySelectorAll('#album-list .result-card[href]').forEach(initRowCheckbox);
 
   document.getElementById('filter-artist').addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
@@ -104,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const artistInput = document.getElementById('filter-artist');
     const sourceSelect = document.getElementById('filter-source');
     const groupToggle = document.getElementById('toggle-group');
+    const selectAll = document.getElementById('select-all-library');
 
     artistInput.disabled = isSkipped;
     artistInput.title = isSkipped ? 'Not filterable in the Skipped view' : '';
@@ -111,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     folderInput.title = isSkipped ? 'Not filterable in the Skipped view' : '';
     sourceSelect.disabled = isSkipped;
     groupToggle.disabled = isSkipped;
+    if (selectAll) selectAll.disabled = isSkipped;
 
     document.getElementById('section-label-text').textContent = VIEW_LABELS[state.view];
     updateGroupControlsVisibility();
@@ -168,6 +177,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPage();
   });
 
+  document.getElementById('select-all-library')?.addEventListener('change', (e) => {
+    document.querySelectorAll('#album-list .js-row-select').forEach((cb) => {
+      cb.checked = e.target.checked;
+      toggleLibraryRowSelection(cb.closest('.result-card'), e.target.checked);
+    });
+  });
+  document.getElementById('bulk-reenrich-btn')?.addEventListener('click', handleBulkReenrich);
+  document.getElementById('bulk-exclude-btn')?.addEventListener('click', handleBulkExcludeArtists);
+  document.getElementById('bulk-clear-btn')?.addEventListener('click', clearLibrarySelection);
+
   // The server always renders the flat/paginated view without art
   // markup. If a saved preference wants grouping and/or grid art, do one
   // real load now so lastData gets populated and rendering catches up.
@@ -216,6 +235,130 @@ function toggleGroup(groupEl) {
     collapsedArtists.add(artist);
   } else {
     collapsedArtists.delete(artist);
+  }
+}
+
+// ── Bulk select ───────────────────────────────────────────────────────────
+function initRowCheckbox(card) {
+  const label = card.querySelector('.row-select');
+  const checkbox = card.querySelector('.js-row-select');
+  if (!label || !checkbox) return;
+  // .result-card is an <a> here (unlike Mappings' plain <div> rows) — a
+  // click on the checkbox/label would otherwise bubble up and trigger
+  // navigation. The server-rendered markup already has an inline
+  // onclick doing the same thing (see library.html); this covers the
+  // JS-rendered path (grid/grouped/paginated re-renders) too, so both
+  // sources of markup behave identically rather than one relying on the
+  // other's inline attribute always being kept in sync by hand.
+  label.addEventListener('click', (e) => e.stopPropagation());
+  checkbox.addEventListener('change', (e) => toggleLibraryRowSelection(card, e.target.checked));
+}
+
+function toggleLibraryRowSelection(card, checked) {
+  const folder = card?.dataset.folder;
+  if (!card || !folder) return;
+  if (checked) {
+    selectedLibrary.set(folder, { artist: card.dataset.artist, album: card.dataset.album });
+  } else {
+    selectedLibrary.delete(folder);
+  }
+  card.classList.toggle('result-card-selected', checked);
+  updateLibraryBulkToolbar();
+}
+
+function clearLibrarySelection({ clearResult = true } = {}) {
+  document.querySelectorAll('#album-list .js-row-select').forEach((cb) => { cb.checked = false; });
+  document.querySelectorAll('#album-list .result-card-selected').forEach((card) => card.classList.remove('result-card-selected'));
+  selectedLibrary.clear();
+  updateLibraryBulkToolbar();
+  if (clearResult) document.getElementById('bulk-result').innerHTML = '';
+}
+
+function updateLibraryBulkToolbar() {
+  const toolbar = document.getElementById('bulk-toolbar');
+  if (!toolbar) return;
+  const count = selectedLibrary.size;
+  document.getElementById('bulk-count').textContent = `${count} selected`;
+  toolbar.style.display = count > 0 ? 'flex' : 'none';
+
+  const selectAll = document.getElementById('select-all-library');
+  const selectable = document.querySelectorAll('#album-list .js-row-select');
+  if (selectAll) {
+    selectAll.checked = selectable.length > 0 && count >= selectable.length;
+    selectAll.indeterminate = count > 0 && count < selectable.length;
+  }
+}
+
+async function handleBulkReenrich() {
+  const albumNames = [...new Set([...selectedLibrary.values()].map((v) => v.album).filter(Boolean))];
+  const count = selectedLibrary.size;
+  if (count === 0) return;
+  if (!confirm(`Re-enrich ${count} album(s)? This clears them from the enriched log and starts a background run for just these.`)) return;
+
+  const btn = document.getElementById('bulk-reenrich-btn');
+  const resultEl = document.getElementById('bulk-result');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+
+  try {
+    const res = await fetch('/api/v1/enrich/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // `album` scopes which albums are actually processed; `redo` clears
+      // them from the enriched log so they're eligible again. Passing the
+      // same name list to both is what makes this "only these albums"
+      // instead of "the whole library" — see app/core/beets_enricher.py's
+      // run_bulk() for how the two combine.
+      body: JSON.stringify({ artist: [], album: albumNames, redo: albumNames, redo_skipped: false }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `request failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML =
+      `<span class="badge badge-green">started</span> ` +
+      `<span>Re-enrichment running for ${count} album(s) — check the <a href="${window.APP_URL_BASE}/enrich">Enrich page</a> for progress.</span>`;
+    clearLibrarySelection({ clearResult: false });
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Re-enrich Selected';
+  }
+}
+
+async function handleBulkExcludeArtists() {
+  const artists = [...new Set([...selectedLibrary.values()].map((v) => v.artist).filter(Boolean))];
+  if (artists.length === 0) return;
+  if (!confirm(`Exclude ${artists.length} artist(s)? Their albums will be skipped during future bulk enrichment and dropped from Mappings' Unmapped list. This doesn't change what's shown here on Library.`)) return;
+
+  const btn = document.getElementById('bulk-exclude-btn');
+  const resultEl = document.getElementById('bulk-result');
+  btn.disabled = true;
+  btn.textContent = 'Excluding…';
+
+  try {
+    const res = await fetch('/api/v1/mapping/bulk-exclude-artists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artists }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `request failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML =
+      `<span class="badge badge-green">done</span> ` +
+      `<span>${data.added.length} artist${data.added.length === 1 ? '' : 's'} excluded` +
+      (data.already_excluded.length ? `, ${data.already_excluded.length} already excluded` : '') +
+      `</span>`;
+    // Library shows every scanned album regardless of excluded-artist
+    // status (that filtering only applies to Mappings' Unmapped list and
+    // bulk enrichment eligibility) — nothing to reload here.
+    clearLibrarySelection({ clearResult: false });
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Exclude Artist(s)';
   }
 }
 
@@ -275,6 +418,8 @@ async function loadGrouped() {
 async function loadSkipped() {
   const listEl = document.getElementById('album-list');
   document.getElementById('pagination').style.display = 'none';
+  selectedLibrary.clear();
+  updateLibraryBulkToolbar();
 
   try {
     const res = await fetch('/api/v1/library/skipped');
@@ -300,6 +445,8 @@ async function loadSkipped() {
 function renderAlbums(data) {
   const listEl = document.getElementById('album-list');
   document.getElementById('lib-total').textContent = data.total;
+  selectedLibrary.clear();
+  updateLibraryBulkToolbar();
 
   if (data.albums.length === 0) {
     listEl.innerHTML = `<div class="empty"><div class="empty-icon">🗒</div>No albums match these filters.</div>`;
@@ -307,12 +454,15 @@ function renderAlbums(data) {
   }
 
   listEl.innerHTML = data.albums.map((a) => renderAlbumRow(a)).join('');
+  listEl.querySelectorAll('.result-card[href]').forEach(initRowCheckbox);
 }
 
 function renderGrouped(data) {
   const listEl = document.getElementById('album-list');
   document.getElementById('lib-total').textContent = data.total;
   updateGroupControlsVisibility();
+  selectedLibrary.clear();
+  updateLibraryBulkToolbar();
 
   if (data.groups.length === 0) {
     listEl.innerHTML = `<div class="empty"><div class="empty-icon">🗒</div>No albums match these filters.</div>`;
@@ -340,6 +490,7 @@ function renderGrouped(data) {
         </div>
       `;
     }).join('');
+  listEl.querySelectorAll('.result-card[href]').forEach(initRowCheckbox);
 }
 
 function renderAlbumRow(a, { hideArtist = false } = {}) {
@@ -362,7 +513,12 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
     : '';
   const href = `${window.APP_URL_BASE}/library/album?folder=${encodeURIComponent(a.folder)}`;
   return `
-    <a class="result-card" href="${href}">
+    <a class="result-card" href="${href}"
+       data-mb-id="${escapeAttr(a.mb_release_id || '')}" data-artist="${escapeAttr(a.artist)}"
+       data-album="${escapeAttr(a.album)}" data-folder="${escapeAttr(a.folder)}">
+      <label class="row-select" onclick="event.stopPropagation()">
+        <input type="checkbox" class="js-row-select">
+      </label>
       ${art}
       <div class="info">
         <div class="info-title">${title}</div>

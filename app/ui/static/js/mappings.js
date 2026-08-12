@@ -1,12 +1,13 @@
 /**
  * Mappings page — search/set/skip/restore/exclude against
  * /api/v1/mapping/*, plus an artist filter (debounced) against
- * GET /api/v1/mapping/unmapped.
+ * GET /api/v1/mapping/unmapped, plus multi-select bulk actions
+ * (Skip Selected / Exclude Artist(s)) on the Unmapped Albums list.
  *
  * Three independent lists share this file, each scoped to its own
  * container so their identical `.result-card` markup never gets
  * double-counted or cross-wired:
- *   #results-container  — unmapped albums (search / set / skip)
+ *   #results-container  — unmapped albums (search / set / skip / bulk)
  *   #skipped-container   — albums marked vgmdb_id="skip" (restore)
  *   #excluded-list        — excluded-artist chips (remove)
  *
@@ -15,10 +16,20 @@
  * Set/Skip both funnel into setMapping(), which PUTs the mapping and
  * removes the row on success (and, since that album now exists in
  * vgmdb_mapping.json, refreshes the Skipped list too when it was a skip).
+ *
+ * Bulk selection state (`selectedUnmapped`, a Map of mb_release_id ->
+ * {artist, album, folder}) lives independently of the DOM rather than
+ * being read off checkboxes on demand — `renderResults()` fully replaces
+ * `#results-container`'s innerHTML on every filter change, which would
+ * silently wipe any DOM-only selection state. Deliberately cleared on
+ * every re-render for the same reason: a selection made against a
+ * pre-filter set of rows shouldn't silently carry over to a different
+ * filtered view where some of those rows aren't even visible anymore.
  */
 
 const DEBOUNCE_MS = 350;
 let debounceTimer = null;
+const selectedUnmapped = new Map();
 
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#results-container .result-card[data-mb-id]').forEach(initUnmappedRow);
@@ -32,7 +43,128 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('import-form')?.addEventListener('submit', handleImportSubmit);
   document.getElementById('excluded-form')?.addEventListener('submit', handleExcludeSubmit);
+
+  document.getElementById('select-all-unmapped')?.addEventListener('change', (e) => {
+    document.querySelectorAll('#results-container .js-row-select:not(:disabled)').forEach((cb) => {
+      cb.checked = e.target.checked;
+      toggleRowSelection(cb.closest('.result-card'), e.target.checked);
+    });
+  });
+  document.getElementById('bulk-skip-btn')?.addEventListener('click', handleBulkSkip);
+  document.getElementById('bulk-exclude-btn')?.addEventListener('click', handleBulkExclude);
+  document.getElementById('bulk-clear-btn')?.addEventListener('click', clearSelection);
 });
+
+// ── Bulk select ───────────────────────────────────────────────────────────
+function toggleRowSelection(row, checked) {
+  const mbId = row?.dataset.mbId;
+  if (!row || !mbId) return;
+  if (checked) {
+    selectedUnmapped.set(mbId, { artist: row.dataset.artist, album: row.dataset.album, folder: row.dataset.folder });
+  } else {
+    selectedUnmapped.delete(mbId);
+  }
+  row.classList.toggle('result-card-selected', checked);
+  updateBulkToolbar();
+}
+
+function clearSelection({ clearResult = true } = {}) {
+  document.querySelectorAll('#results-container .js-row-select').forEach((cb) => { cb.checked = false; });
+  document.querySelectorAll('#results-container .result-card-selected').forEach((row) => row.classList.remove('result-card-selected'));
+  selectedUnmapped.clear();
+  updateBulkToolbar();
+  if (clearResult) document.getElementById('bulk-result').innerHTML = '';
+}
+
+function updateBulkToolbar() {
+  const toolbar = document.getElementById('bulk-toolbar');
+  const count = selectedUnmapped.size;
+  document.getElementById('bulk-count').textContent = `${count} selected`;
+  toolbar.style.display = count > 0 ? 'flex' : 'none';
+
+  const selectAll = document.getElementById('select-all-unmapped');
+  const selectable = document.querySelectorAll('#results-container .js-row-select:not(:disabled)');
+  if (selectAll) {
+    selectAll.checked = selectable.length > 0 && count >= selectable.length;
+    selectAll.indeterminate = count > 0 && count < selectable.length;
+  }
+}
+
+async function handleBulkSkip() {
+  const items = [...selectedUnmapped.entries()].map(([mb_release_id, v]) => ({ mb_release_id, ...v }));
+  if (items.length === 0) return;
+  if (!confirm(`Skip ${items.length} album(s)? They'll move to Skipped Albums and won't be asked about again.`)) return;
+
+  const btn = document.getElementById('bulk-skip-btn');
+  const resultEl = document.getElementById('bulk-result');
+  btn.disabled = true;
+  btn.textContent = 'Skipping…';
+
+  try {
+    const res = await fetch('/api/v1/mapping/bulk-skip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `bulk skip failed (HTTP ${res.status})`);
+
+    data.skipped.forEach((mbId) => {
+      document.querySelector(`#results-container .result-card[data-mb-id="${CSS.escape(mbId)}"]`)?.remove();
+      selectedUnmapped.delete(mbId);
+    });
+    updateUnmappedCount();
+    updateBulkToolbar();
+    await refreshSkipped();
+
+    resultEl.innerHTML = data.failed.length
+      ? `<span class="badge badge-yellow">partial</span> <span>${data.skipped.length} skipped, ${data.failed.length} failed</span>`
+      : `<span class="badge badge-green">done</span> <span>${data.skipped.length} album(s) skipped</span>`;
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Skip Selected';
+  }
+}
+
+async function handleBulkExclude() {
+  const artists = [...new Set([...selectedUnmapped.values()].map((v) => v.artist).filter(Boolean))];
+  if (artists.length === 0) return;
+  if (!confirm(`Exclude ${artists.length} artist(s)? Their albums will drop out of Unmapped and be skipped during bulk enrichment.`)) return;
+
+  const btn = document.getElementById('bulk-exclude-btn');
+  const resultEl = document.getElementById('bulk-result');
+  btn.disabled = true;
+  btn.textContent = 'Excluding…';
+
+  try {
+    const res = await fetch('/api/v1/mapping/bulk-exclude-artists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artists }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `bulk exclude failed (HTTP ${res.status})`);
+
+    data.added.forEach(addExcludedChip);
+    resultEl.innerHTML =
+      `<span class="badge badge-green">done</span> ` +
+      `<span>${data.added.length} artist${data.added.length === 1 ? '' : 's'} excluded` +
+      (data.already_excluded.length ? `, ${data.already_excluded.length} already excluded` : '') +
+      `</span>`;
+
+    // Excluded artists' albums disappear from Unmapped — reload it.
+    // This also clears selectedUnmapped via renderResults(), so no need
+    // to do it explicitly here.
+    await loadUnmapped(document.getElementById('filter-artist')?.value.trim() || '');
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Exclude Artist(s)';
+  }
+}
 
 // ── Excluded artists ─────────────────────────────────────────────────────
 function initExcludedChip(btn) {
@@ -217,6 +349,8 @@ async function loadUnmapped(artist) {
 function renderResults(rows) {
   const container = document.getElementById('results-container');
   document.querySelectorAll('.js-unmapped-count').forEach((el) => (el.textContent = rows.length));
+  selectedUnmapped.clear();
+  updateBulkToolbar();
 
   if (rows.length === 0) {
     container.innerHTML =
@@ -230,12 +364,16 @@ function renderResults(rows) {
 }
 
 function renderRow(item) {
+  const disabled = item.mb_release_id ? '' : 'disabled title="No MusicBrainz release id — can\'t be skipped"';
   return `
     <div class="result-card"
          data-mb-id="${escapeHtml(item.mb_release_id || '')}"
          data-artist="${escapeHtml(item.artist)}"
          data-album="${escapeHtml(item.album)}"
          data-folder="${escapeHtml(item.folder)}">
+      <label class="row-select">
+        <input type="checkbox" class="js-row-select" ${disabled}>
+      </label>
       <div class="info">
         <div class="info-title">${escapeHtml(item.artist)} — ${escapeHtml(item.album)}</div>
         <div class="info-meta js-meta">
@@ -261,6 +399,7 @@ function initUnmappedRow(row) {
 
   row.querySelector('.js-search')?.addEventListener('click', () => runSearch(row, ctx));
   row.querySelector('.js-skip')?.addEventListener('click', () => setMapping(row, { ...ctx, vgmdbId: 'skip' }));
+  row.querySelector('.js-row-select')?.addEventListener('change', (e) => toggleRowSelection(row, e.target.checked));
 }
 
 async function runSearch(row, ctx) {
@@ -351,7 +490,9 @@ async function setMapping(row, ctx) {
     });
     if (!res.ok) throw new Error(`set failed (HTTP ${res.status})`);
     row.remove();
+    selectedUnmapped.delete(ctx.mbId);
     updateUnmappedCount();
+    updateBulkToolbar();
     if (ctx.vgmdbId === 'skip') await refreshSkipped();
   } catch (err) {
     actionsEl.querySelectorAll('button').forEach((b) => (b.disabled = false));

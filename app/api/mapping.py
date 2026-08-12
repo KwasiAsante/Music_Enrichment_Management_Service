@@ -18,6 +18,10 @@ excluded artists).
 * ``PUT    /{mb_release_id}``         — set / update a single mapping
                                         (``vgmdb_id="skip"`` marks it skipped).
 * ``DELETE /{mb_release_id}``         — remove a mapping (un-skips it too).
+* ``POST   /bulk-skip``               — skip several albums in one call
+                                        (Mappings/Library pages' multi-select).
+* ``POST   /bulk-exclude-artists``    — exclude several artists in one call
+                                        (same multi-select toolbars).
 * ``GET    /export``                  — download the whole mapping as a
                                         backup file.
 * ``POST   /import``                  — restore/merge mappings from a
@@ -35,6 +39,10 @@ from fastapi.responses import JSONResponse
 
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.models.mapping import (
+    BulkExcludeArtistsRequest,
+    BulkExcludeArtistsResult,
+    BulkSkipRequest,
+    BulkSkipResult,
     DeleteMappingResult,
     ExcludedArtistRequest,
     ExcludedArtistResult,
@@ -225,6 +233,72 @@ def delete_mapping(
     if ok and not dry_run:
         db.add_activity("mapping", f"deleted mapping {mb_release_id}")
     return DeleteMappingResult(deleted=ok, dry_run=dry_run)
+
+
+# ── POST /mapping/bulk-skip ─────────────────────────────────────────────────
+@router.post("/bulk-skip", response_model=BulkSkipResult)
+def bulk_skip(req: BulkSkipRequest) -> BulkSkipResult:
+    """Skip several albums in one call — the multi-select toolbar on the
+    Mappings page's Unmapped list. Best-effort per item: one bad entry
+    doesn't fail the whole batch, it just shows up in ``failed`` — the
+    same "partial success is still useful" pattern as bulk mapping
+    import (see ``POST /import``).
+    """
+    mapper = VGMDBMapper()
+    skipped: list[str] = []
+    failed: list[dict] = []
+
+    for item in req.items:
+        try:
+            mapper.set_mapping(
+                mb_release_id=item.mb_release_id,
+                vgmdb_id="skip",
+                artist=item.artist,
+                album=item.album,
+                folder=item.folder,
+                source="manual",
+            )
+            skipped.append(item.mb_release_id)
+        except ValueError as exc:
+            failed.append({"mb_release_id": item.mb_release_id, "error": str(exc)})
+
+    if skipped:
+        db.add_activity("mapping", f"bulk skip: {len(skipped)} album(s)")
+    return BulkSkipResult(skipped=skipped, failed=failed)
+
+
+# ── POST /mapping/bulk-exclude-artists ──────────────────────────────────────
+@router.post("/bulk-exclude-artists", response_model=BulkExcludeArtistsResult)
+def bulk_exclude_artists(req: BulkExcludeArtistsRequest) -> BulkExcludeArtistsResult:
+    """Exclude several artists in one call — shared by the Mappings and
+    Library pages' multi-select toolbars (a selection of albums maps to
+    a, usually smaller, deduplicated set of artists on the frontend
+    before this ever gets called).
+    """
+    mapper = VGMDBMapper()
+    added: list[str] = []
+    already_excluded: list[str] = []
+
+    # Dedup case-insensitively, preserving first-seen casing — the
+    # frontend already dedupes, but never trust that alone.
+    seen: set[str] = set()
+    unique_artists = []
+    for artist in req.artists:
+        key = artist.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            unique_artists.append(artist.strip())
+
+    for artist in unique_artists:
+        try:
+            changed = mapper.add_excluded_artist(artist)
+        except ValueError:
+            continue  # blank after strip — skip silently, not a real artist
+        (added if changed else already_excluded).append(artist)
+
+    if added:
+        db.add_activity("mapping", f"bulk exclude: {len(added)} artist(s)")
+    return BulkExcludeArtistsResult(added=added, already_excluded=already_excluded)
 
 
 # ── GET /mapping/export ─────────────────────────────────────────────────────

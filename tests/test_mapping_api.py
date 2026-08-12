@@ -125,6 +125,33 @@ def test_excluded_artist_removed_from_unmapped(client: TestClient, auth, isolate
     assert "Linkin Park" in artists
 
 
+def test_mappings_page_has_bulk_select_ui(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+
+    store.album_list.write({
+        "Album1": {"artist": "Artist A", "album": "Album 1", "mb_release_id": "mb-1", "folder": "Artist A/Album 1"},
+    })
+
+    r = client.get("/mappings", auth=auth)
+    assert r.status_code == 200
+    text = r.text
+    assert 'id="select-all-unmapped"' in text
+    assert 'id="bulk-toolbar"' in text
+    assert 'id="bulk-skip-btn"' in text
+    assert 'id="bulk-exclude-btn"' in text
+    assert 'class="js-row-select"' in text
+
+
+def test_mappings_page_disables_checkbox_for_rows_without_mb_release_id(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+
+    store.album_list.write({
+        "NoMbId": {"artist": "X", "album": "Y", "mb_release_id": "", "folder": "X/Y"},
+    })
+    r = client.get("/mappings", auth=auth)
+    assert 'class="js-row-select" disabled' in r.text
+
+
 # ── skipped albums ────────────────────────────────────────────────────────
 def test_skip_and_restore(client: TestClient, auth):
     r = client.put("/api/v1/mapping/mb-rel-skip-1",
@@ -143,3 +170,72 @@ def test_skip_and_restore(client: TestClient, auth):
     assert r.json()["deleted"] is True
     r = client.get("/api/v1/mapping/skipped", auth=auth)
     assert len(r.json()) == 0
+
+
+# ── bulk actions ──────────────────────────────────────────────────────────
+def test_bulk_skip(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-skip", json={"items": [
+        {"mb_release_id": "mb-1", "artist": "Artist A", "album": "Album 1"},
+        {"mb_release_id": "mb-2", "artist": "Artist A", "album": "Album 2"},
+    ]}, auth=auth)
+    assert r.status_code == 200
+    data = r.json()
+    assert set(data["skipped"]) == {"mb-1", "mb-2"}
+    assert data["failed"] == []
+
+    r = client.get("/api/v1/mapping/skipped", auth=auth)
+    assert len(r.json()) == 2
+
+
+def test_bulk_skip_partial_failure_does_not_block_the_rest(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-skip", json={"items": [
+        {"mb_release_id": "mb-1", "artist": "A", "album": "B"},
+        {"mb_release_id": "", "artist": "Bad"},  # invalid — empty id
+        {"mb_release_id": "mb-2", "artist": "C", "album": "D"},
+    ]}, auth=auth)
+    data = r.json()
+    assert set(data["skipped"]) == {"mb-1", "mb-2"}
+    assert len(data["failed"]) == 1
+    assert data["failed"][0]["mb_release_id"] == ""
+
+
+def test_bulk_skip_empty_items_is_a_no_op(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-skip", json={"items": []}, auth=auth)
+    assert r.status_code == 200
+    assert r.json() == {"skipped": [], "failed": []}
+
+
+def test_bulk_exclude_artists(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-exclude-artists", json={
+        "artists": ["Artist X", "Artist Y"],
+    }, auth=auth)
+    assert r.status_code == 200
+    data = r.json()
+    assert set(data["added"]) == {"Artist X", "Artist Y"}
+    assert data["already_excluded"] == []
+
+    r = client.get("/api/v1/mapping/excluded-artists", auth=auth)
+    assert "Artist X" in r.json() and "Artist Y" in r.json()
+
+
+def test_bulk_exclude_artists_dedupes_case_insensitively(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-exclude-artists", json={
+        "artists": ["Artist X", "artist x", "ARTIST X", "  Artist X  "],
+    }, auth=auth)
+    data = r.json()
+    assert data["added"] == ["Artist X"]  # only added once
+
+
+def test_bulk_exclude_artists_reports_already_excluded_not_as_error(client: TestClient, auth):
+    client.post("/api/v1/mapping/bulk-exclude-artists", json={"artists": ["Artist X"]}, auth=auth)
+
+    r = client.post("/api/v1/mapping/bulk-exclude-artists", json={"artists": ["Artist X", "Artist Y"]}, auth=auth)
+    data = r.json()
+    assert data["added"] == ["Artist Y"]
+    assert data["already_excluded"] == ["Artist X"]
+
+
+def test_bulk_exclude_artists_ignores_blank_entries(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/bulk-exclude-artists", json={"artists": ["", "   ", "Real Artist"]}, auth=auth)
+    data = r.json()
+    assert data["added"] == ["Real Artist"]

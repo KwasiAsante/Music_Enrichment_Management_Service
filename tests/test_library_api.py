@@ -144,3 +144,33 @@ def test_library_api_intentionally_open_no_auth_required(client: TestClient):
 def test_settings_api_does_require_auth(client: TestClient):
     r = client.get("/api/v1/settings")
     assert r.status_code == 401
+
+
+# ── Library page bulk-select UI ─────────────────────────────────────────────
+def test_library_page_has_bulk_select_ui(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+
+    store.album_list.write({
+        "Album1": {"artist": "Artist A", "album": "Album 1", "mb_release_id": "mb-1", "folder": "Artist A/Album 1"},
+        "Album2": {"artist": "Artist B", "album": "Album 2", "mb_release_id": "", "folder": "Artist B/Album 2"},
+    })
+
+    r = client.get("/library", auth=auth)
+    assert r.status_code == 200
+    text = r.text
+    assert 'id="select-all-library"' in text
+    assert 'id="bulk-toolbar"' in text
+    assert 'id="bulk-reenrich-btn"' in text
+    assert 'id="bulk-exclude-btn"' in text
+    assert text.count('class="js-row-select"') == 2
+    assert 'data-folder="Artist A/Album 1"' in text
+    # every checkbox needs the stopPropagation guard, since .result-card
+    # is an <a> here (unlike Mappings' plain <div> rows) — without it,
+    # checking a box would also navigate away.
+    assert text.count('onclick="event.stopPropagation()"') == 2
+
+
+def test_library_skipped_view_has_no_bulk_select_ui(client: TestClient, auth):
+    r = client.get("/library?view=skipped", auth=auth)
+    assert 'id="select-all-library"' not in r.text
+    assert 'class="js-row-select"' not in r.text
