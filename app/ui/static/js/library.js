@@ -356,11 +356,11 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
   // Art only in grid mode — list mode never requests thumbnails at all.
   const art = state.layout === 'grid' && a.folder
     ? `<div class="album-art-wrap">` +
-      `<img class="album-art" src="/api/v1/library/art?folder=${encodeURIComponent(a.folder)}" ` +
+      `<img class="album-art" src="${window.APP_URL_BASE}/api/v1/library/art?folder=${encodeURIComponent(a.folder)}" ` +
       `alt="" loading="lazy" decoding="async" onerror="this.remove()">` +
       `</div>`
     : '';
-  const href = `/library/album?folder=${encodeURIComponent(a.folder)}`;
+  const href = `${window.APP_URL_BASE}/library/album?folder=${encodeURIComponent(a.folder)}`;
   return `
     <a class="result-card" href="${href}">
       ${art}
@@ -377,7 +377,7 @@ function renderAlbumRow(a, { hideArtist = false } = {}) {
 }
 
 function renderSkippedRow(s) {
-  const href = `/library/album?folder=${encodeURIComponent(s.folder)}`;
+  const href = `${window.APP_URL_BASE}/library/album?folder=${encodeURIComponent(s.folder)}`;
   return `
     <a class="result-card" href="${href}">
       <div class="info">

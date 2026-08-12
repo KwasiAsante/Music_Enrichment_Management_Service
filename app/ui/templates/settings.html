@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Settings — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Settings</div>
+    <h1>Settings</h1>
+    <p class="page-sub">Every field here needs a restart to take effect — see the note below.</p>
+  </div>
+</div>
+
+<div class="tip-banner settings-note">
+  <span class="tip-banner-icon">ℹ</span>
+  <span class="tip-banner-text">
+    Nothing here applies live — the app only reads its configuration once, at startup. Saving stages a change; you still need to restart (button appears below once something's pending) for it to actually take effect.
+  </span>
+</div>
+
+<div class="restart-banner" id="restart-banner" style="display:{{ 'flex' if view.restart_required else 'none' }};">
+  <span class="restart-banner-icon">⟲</span>
+  <span class="restart-banner-text">Restart required — you have unapplied changes.</span>
+  <button type="button" class="btn btn-primary btn-sm" id="restart-btn">Restart Now</button>
+</div>
+
+<div id="save-result" class="import-result"></div>
+
+<form id="settings-form">
+  {% for group in view.groups %}
+  <section class="settings-section">
+    <div class="section-label">{{ group.name }}</div>
+    <div class="settings-fields">
+      {% for field in group.fields %}
+      <div class="settings-row{% if not field.editable %} settings-row-readonly{% endif %}">
+        <div class="settings-row-label">
+          <label for="field-{{ field.key }}">{{ field.label }}</label>
+          {% if field.overridden %}<span class="badge badge-purple settings-pill">customized</span>{% endif %}
+          {% if field.restart_pending %}<span class="badge badge-yellow settings-pill">pending restart</span>{% endif %}
+          {% if field.help_text %}<p class="settings-help">{{ field.help_text | safe }}</p>{% endif %}
+        </div>
+        <div class="settings-row-input">
+          {% if not field.editable %}
+            <div class="settings-readonly-value">{{ field.value }}</div>
+          {% elif field.field_type == "bool" %}
+            <label class="toggle-check settings-toggle">
+              <input type="checkbox" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="bool" {% if field.value %}checked{% endif %}>
+              {{ "Enabled" if field.value else "Disabled" }}
+            </label>
+          {% elif field.field_type == "select" %}
+            <select id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="select">
+              {% for opt in field.options %}
+              <option value="{{ opt }}" {% if opt == field.value %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          {% elif field.field_type == "password" %}
+            <input type="password" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="password"
+                   placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
+                   autocomplete="new-password">
+          {% else %}
+            <input type="text" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="text" value="{{ field.value or '' }}">
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <div class="settings-actions">
+    <button type="submit" class="btn btn-primary" id="save-btn">Save Changes</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/settings.js') }}" defer></script>
+{% endblock %}

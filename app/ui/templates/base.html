@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-url-base="{{ url_base }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,7 @@
 </head>
 <body>
 
+<script src="{{ url_for('static', path='js/url-base.js') }}"></script>
 <script>
   // Runs synchronously, before the sidebar markup below is parsed, so a
   // previously-collapsed sidebar doesn't flash open on every page load.
@@ -36,9 +37,10 @@
       ('/logs', '≡', 'Logs'),
       ('/music-search', '♪', 'Music Search'),
       ('/help', '?', 'Help'),
+      ('/settings', '⚙', 'Settings'),
     ] %}
     {% for path, icon, label in nav_items %}
-    <a class="nav-item{% if request.url.path == path %} active{% endif %}" href="{{ path }}" title="{{ label }}">
+    <a class="nav-item{% if request.url.path == (url_base ~ path) %} active{% endif %}" href="{{ url_base }}{{ path }}" title="{{ label }}">
       <span class="icon">{{ icon }}</span><span class="label">{{ label }}</span>
     </a>
     {% endfor %}

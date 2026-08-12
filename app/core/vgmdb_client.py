@@ -13,9 +13,16 @@ The local vgmdb-api search endpoint is path-based, e.g.::
 so the query is URL-encoded as a *path segment* (``urllib.parse.quote``),
 not as a query parameter.
 
-Failures (network, HTTP, malformed JSON) return an empty list and log a
-warning. Callers should treat "no results" and "search failed" the same
-way — fall through to the next search strategy.
+Every request sends a browser-spoofing ``User-Agent`` — the same string
+:mod:`app.beets_plugins.VGMplug` already sends on every VGMDB request it
+makes. Without it, at least the ``/album/{id}`` endpoint 403s (seen in
+practice against a self-hosted vgmdb-api instance); matching what the
+beets plugin already does successfully avoids relying on undocumented
+behaviour of someone else's reverse proxy / upstream.
+
+Failures (network, HTTP, malformed JSON) return an empty list/``None``
+and log a warning. Callers should treat "no results" and "search failed"
+the same way — fall through to the next search strategy.
 """
 
 from __future__ import annotations
@@ -29,6 +36,15 @@ import httpx
 from app.config import settings
 
 log = logging.getLogger("music-lib-helper.vgmdb")
+
+# Matches app/beets_plugins/VGMplug.py's USERAGENT exactly — that's the
+# value already proven to get past whatever's blocking bare/default user
+# agents on the way to VGMDB (self-hosted mirror and/or the real
+# vgmdb.info it proxies to for individual album lookups).
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:114.0) "
+                  "Gecko/20100101 Firefox/114.0",
+}
 
 
 class VGMDBHint(TypedDict, total=False):
@@ -78,7 +94,9 @@ class VGMDBClient:
             return []
         url = f"{self._base}/search/albums/{quote(query, safe='')}"
         try:
-            r = httpx.get(url, params={"format": "json"}, timeout=self._timeout)
+            r = httpx.get(
+                url, params={"format": "json"}, headers=_HEADERS, timeout=self._timeout,
+            )
             r.raise_for_status()
             results = (r.json().get("results") or {}).get("albums") or []
         except httpx.HTTPError as exc:
@@ -131,7 +149,9 @@ class VGMDBClient:
             return None
         url = f"{self._base}/album/{quote(str(vgmdb_id), safe='')}"
         try:
-            r = httpx.get(url, params={"format": "json"}, timeout=self._timeout)
+            r = httpx.get(
+                url, params={"format": "json"}, headers=_HEADERS, timeout=self._timeout,
+            )
             r.raise_for_status()
             return r.json()
         except httpx.HTTPError as exc:

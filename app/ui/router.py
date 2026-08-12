@@ -48,6 +48,13 @@ these are top-level paths so they read naturally in a browser
 * ``GET /help``      — Static documentation page, no data. Per-page
                         dismissible tip banners (``templates/_tip_banner.html``,
                         ``static/js/tips.js``) link into this page's anchors.
+* ``GET /settings``  — Real data: :func:`app.api.settings.get_settings_view`
+                        (same function the API uses), rendered as a form.
+                        Save/Restart wired live via ``static/js/settings.js``
+                        against ``PUT``/``POST /api/v1/settings*`` — see that
+                        module for why every field needs a restart to apply,
+                        and why this is the one router that sits behind
+                        login even on the API side.
 
 Each handler passes ``request`` in the template context — required by
 Jinja2Templates, and also what ``base.html`` uses to compute which sidebar
@@ -63,6 +70,7 @@ from fastapi.responses import HTMLResponse
 
 from app.api import library as library_api
 from app.api import logs as logs_api
+from app.api import settings as settings_api
 from app.config import settings
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.storage import db
@@ -245,3 +253,14 @@ def music_search_page(request: Request) -> HTMLResponse:
 def help_page(request: Request) -> HTMLResponse:
     """Static documentation — no data to fetch, just the template."""
     return templates.TemplateResponse(request, "help.html", {})
+
+
+# ── GET /settings ────────────────────────────────────────────────────────────
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request) -> HTMLResponse:
+    """Server-rendered from :func:`app.api.settings.get_settings_view` —
+    same data the API returns, just rendered as a form instead of JSON.
+    Saving/restarting happen client-side via ``static/js/settings.js``.
+    """
+    view = settings_api.get_settings_view()
+    return templates.TemplateResponse(request, "settings.html", {"view": view})

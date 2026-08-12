@@ -438,3 +438,46 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+
+/* ── Settings page ───────────────────────────────────────────────────────── */
+
+.settings-note { align-items: center; }
+
+.restart-banner {
+  display: flex; align-items: center; gap: 10px; background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.3); border-radius: 10px; padding: 12px 16px;
+  margin-bottom: 20px;
+}
+.restart-banner-icon { font-size: 16px; color: var(--warn); flex-shrink: 0; }
+.restart-banner-text { flex: 1; font-size: 13px; color: var(--text); }
+
+.settings-section { margin-bottom: 28px; }
+.settings-fields { display: flex; flex-direction: column; }
+.settings-row {
+  display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: start;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-readonly { opacity: 0.7; }
+.settings-row-label label { font-size: 13px; font-weight: 700; color: var(--text); display: inline-block; margin-right: 6px; }
+.settings-pill { margin-left: 4px; }
+.settings-help { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.65; max-width: 560px; }
+.settings-help code {
+  background: var(--subtle); border-radius: 4px; padding: 1px 6px; font-family: 'DM Mono', monospace;
+  font-size: 11px; color: var(--text); white-space: nowrap;
+}
+.settings-row-input { min-width: 0; }
+.settings-row-input input[type="text"],
+.settings-row-input input[type="password"],
+.settings-row-input select {
+  width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 10px; outline: none;
+}
+.settings-row-input input:focus, .settings-row-input select:focus { border-color: var(--accent); }
+.settings-readonly-value {
+  font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); padding: 8px 0;
+  word-break: break-all;
+}
+.settings-toggle { padding: 8px 0; }
+
+.settings-actions { display: flex; justify-content: flex-end; padding-top: 8px; margin-bottom: 40px; }

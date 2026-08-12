@@ -192,13 +192,29 @@ def add_activity(
     artist: Optional[str] = None,
     album: Optional[str] = None,
 ) -> None:
-    """Append one entry to the activity log."""
-    with _connect() as conn:
-        conn.execute(
-            "INSERT INTO activity_log (ts, category, level, artist, album, message) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (_utcnow(), category, level, artist, album, message),
-        )
+    """Append one entry to the activity log.
+
+    Deliberately swallows its own failures (logging a warning instead of
+    raising): this is an audit trail (see the module docstring —
+    "operational history", not domain state), called from ~20 places
+    across the API right after the operation it's recording has already
+    succeeded. If the database happens to be unwritable (wrong file
+    permissions after a Docker-then-local ownership mismatch, a full
+    disk, etc.), that should show up as a degraded activity log, not as
+    a 500 on an action that actually completed fine — e.g. Settings page
+    saves were doing real work (writing the override file) and then
+    failing the whole request on this call alone, which made a
+    successful save look like an error to the person using it.
+    """
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "INSERT INTO activity_log (ts, category, level, artist, album, message) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (_utcnow(), category, level, artist, album, message),
+            )
+    except sqlite3.Error as exc:
+        log.warning("could not write activity log entry (%s: %s): %s", category, message, exc)
 
 
 def list_activity(

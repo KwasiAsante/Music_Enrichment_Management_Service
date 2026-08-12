@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__, scheduler
-from app.api import artist, enrich, library, logs, mapping, mb, picard, proxy
+from app.api import artist, enrich, library, logs, mapping, mb, picard, proxy, settings as settings_api
 from app.config import settings
 from app.storage import db
 from app.ui import router as ui
@@ -83,6 +83,15 @@ app = FastAPI(
 # ── static files + web UI ─────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="app/ui/static"), name="static")
 ui.templates.env.globals["app_version"] = __version__
+# Every hardcoded internal link/fetch in the templates and static JS is
+# manually prefixed with this (see static/js/url-base.js for the JS side,
+# and the many `{{ url_base }}/...` hrefs across app/ui/templates/*.html)
+# rather than relying solely on ASGI root_path propagation through
+# url_for() — that part *is* handled automatically by the Mount() below
+# for static-file URLs, but hardcoded string literals bypass url_for()
+# entirely and need this to actually go anywhere useful when the app is
+# served from a subpath.
+ui.templates.env.globals["url_base"] = settings.url_base
 
 # ── API routers ─────────────────────────────────────────────────────────────
 app.include_router(library.router)
@@ -93,6 +102,7 @@ app.include_router(picard.router)
 app.include_router(proxy.router)
 app.include_router(enrich.router)
 app.include_router(logs.router)
+app.include_router(settings_api.router)
 app.include_router(ui.router)
 
 
@@ -104,4 +114,41 @@ async def health() -> dict[str, object]:
         "version": __version__,
         "placeholders": settings.placeholder_fields(),
     }
+
+
+# ── URL base (subpath deployment) ───────────────────────────────────────────
+# Same idea as Sonarr/Radarr/Lidarr's "URL Base" setting: when set, the
+# whole app — UI, API, static assets, health check, docs — actually gets
+# served under that path prefix, so a reverse proxy can pass e.g.
+# `/music-helper/*` straight through with no path-rewriting. This wraps
+# `app` (all routes above stay defined at their normal, unprefixed paths)
+# in an outer mounting shell; Starlette's Mount() strips the prefix
+# before dispatching to `app`, and sets ASGI root_path so `url_for()`
+# (used for static asset URLs) automatically includes it too.
+#
+# Starlette does NOT automatically run a mounted sub-app's lifespan —
+# only the top-level ASGI app's lifespan fires on startup/shutdown. Since
+# `asgi_app`, not `app`, is what uvicorn actually drives once URL_BASE is
+# set, the outer shell needs its own lifespan that just delegates into
+# `app`'s real one — otherwise db.init_db(), the scheduler, etc. would
+# silently never run. (Caught by an actual TestClient run against
+# asgi_app failing on "no such table: activity_log" — not hypothetical.)
+#
+# `asgi_app` — not `app` — is what actually gets served (see the
+# Dockerfile's uvicorn command). `app` stays importable on its own
+# (`from app.main import app`) for tests, which don't care about url_base
+# and exercise `lifespan` directly via `TestClient(app)`.
+if settings.url_base:
+    log.info("serving under URL base: %s", settings.url_base)
+
+    @asynccontextmanager
+    async def _root_lifespan(_: FastAPI):
+        async with lifespan(app):
+            yield
+
+    _root = FastAPI(openapi_url=None, docs_url=None, redoc_url=None, lifespan=_root_lifespan)
+    _root.mount(settings.url_base, app)
+    asgi_app = _root
+else:
+    asgi_app = app
 

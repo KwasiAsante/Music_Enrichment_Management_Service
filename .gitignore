@@ -180,3 +180,10 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .DS_Store
+
+# Runtime state (bind-mounted at /data in Docker, or APP_DATA_DIR for
+# local dev — see docker-compose.yml.example / .vscode launch configs).
+# Contains vgmdb_mapping.json, app.db, and settings_override.json, which
+# can hold plaintext secrets saved via the Settings page — never commit
+# this even accidentally.
+data/

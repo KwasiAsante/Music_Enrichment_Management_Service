@@ -12,13 +12,13 @@
 
 {% set tip_key = "mappings" %}
 {% set tip_text = "Skip marks one album as confirmed-not-on-VGMDB; Exclude an artist keeps their whole catalog out of Unmapped and bulk enrichment." %}
-{% set tip_href = "/help#mappings" %}
+{% set tip_href = url_base ~ "/help#mappings" %}
 {% include "_tip_banner.html" %}
 
 <section class="backup-panel">
   <div class="section-label">Backup &amp; Restore</div>
   <div class="backup-row">
-    <a class="btn btn-ghost btn-sm" href="/api/v1/mapping/export" download>⇩ Export backup</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_base }}/api/v1/mapping/export" download>⇩ Export backup</a>
 
     <form id="import-form" class="import-form">
       <input type="file" id="import-file" accept="application/json" required>

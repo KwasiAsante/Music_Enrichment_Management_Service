@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="eyebrow"><a href="/library" class="eyebrow-back">← Library</a></div>
+    <div class="eyebrow"><a href="{{ url_base }}/library" class="eyebrow-back">← Library</a></div>
     {% if detail %}
     <h1>{{ detail.album }}</h1>
     <p class="page-sub">
@@ -12,7 +12,7 @@
     </p>
     {% else %}
     <h1>Album not found</h1>
-    <p class="page-sub">This folder may have been renamed, moved, or removed in a rescan since you got here. <a href="/library">Back to Library</a></p>
+    <p class="page-sub">This folder may have been renamed, moved, or removed in a rescan since you got here. <a href="{{ url_base }}/library">Back to Library</a></p>
     {% endif %}
   </div>
 </div>
@@ -23,7 +23,7 @@
     <div class="album-art-main">
       {% if detail.art.front or detail.art.back %}
         {% set initial_side = "front" if detail.art.front else "back" %}
-        <img src="/api/v1/library/art?folder={{ detail.folder | urlencode }}&side={{ initial_side }}"
+        <img src="{{ url_base }}/api/v1/library/art?folder={{ detail.folder | urlencode }}&side={{ initial_side }}"
              alt="{{ detail.album }} cover" id="album-art-img" data-side="{{ initial_side }}">
       {% else %}
         <div class="album-art-placeholder" id="album-art-placeholder">♪</div>

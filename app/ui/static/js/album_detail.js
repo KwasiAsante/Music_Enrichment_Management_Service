@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   flipBtn.addEventListener('click', () => {
     const showing = flipBtn.dataset.showing === 'front' ? 'back' : 'front';
     flipBtn.dataset.showing = showing;
-    img.src = `/api/v1/library/art?folder=${encodeURIComponent(flipBtn.dataset.folder)}&side=${showing}`;
+    img.src = `${window.APP_URL_BASE}/api/v1/library/art?folder=${encodeURIComponent(flipBtn.dataset.folder)}&side=${showing}`;
     img.dataset.side = showing;
     flipBtn.textContent = showing === 'front' ? '⟳ Show back cover' : '⟳ Show front cover';
   });

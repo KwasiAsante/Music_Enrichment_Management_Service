@@ -69,4 +69,7 @@ RUN mkdir -p ${APP_DATA_DIR}
 EXPOSE 8900
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8900"]
+# app.main:asgi_app, not app.main:app — asgi_app is `app` itself when
+# URL_BASE is unset (the default), or `app` wrapped under that prefix
+# when it's set. See app/main.py.
+CMD ["uvicorn", "app.main:asgi_app", "--host", "0.0.0.0", "--port", "8900"]

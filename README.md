@@ -125,7 +125,7 @@ Docker isn't required — everything in `Dockerfile` beyond installing python pa
 6. **Run it:**
 
    ```bash
-   uvicorn app.main:app --reload --port 8900
+   uvicorn app.main:asgi_app --reload --port 8900
    ```
 
    Same `.env`, same behavior as the container — `--reload` is the one addition, handy for local development since it restarts on code changes.
@@ -134,18 +134,24 @@ What you lose by skipping Docker: process supervision (`tini`, `restart:unless-s
 
 ## Web UI
 
-Six pages, server-rendered (Jinja2 + vanilla JS, no build step), all behind
+Eight pages, server-rendered (Jinja2 + vanilla JS, no build step), all behind
 a login:
 
-| Page         | Path            | What it does                                                                                                                               |
-| ------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dashboard    | `/`             | Library stats, recent activity (filterable by category), one-click scan (with an opt-in cleanup pass), artist path fix, and enrichment run |
-| Mappings     | `/mappings`     | Queue of albums without a VGMDB association — search VGMDB, set, or skip, with an artist filter                                            |
-| Enrich       | `/enrich`       | Run enrichment against filtered artists/albums or specific redos, with a live progress/log view                                            |
-| Library      | `/library`      | Browse every scanned album, filter by artist or unmapped status, paginated                                                                 |
-| Logs         | `/logs`         | Full activity log — filter by category, level, or artist                                                                                   |
-| Music Search | `/music-search` | MusicBrainz search → add to Lidarr, or search Prowlarr/Nyaa indexers and send straight to qBittorrent                                      |
+| Page          | Path            | What it does                                                                                                                               |
+| ------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dashboard     | `/`             | Library stats, recent activity (filterable by category), one-click scan (with an opt-in cleanup pass), artist path fix, and enrichment run |
+| Mappings      | `/mappings`     | Queue of albums without a VGMDB association — search VGMDB, set, or skip; excluded-artists list; export/import backups                     |
+| Enrich        | `/enrich`       | Run enrichment against filtered artists/albums or specific redos, with a live progress/log view                                            |
+| Library       | `/library`      | Browse every scanned album — filter, group by artist, list/grid layout with cover art, click through to an album's full detail page        |
+| Logs          | `/logs`         | Full activity log — filter by category, level, or artist                                                                                   |
+| Music Search  | `/music-search` | MusicBrainz search → add to Lidarr, or search Prowlarr/Nyaa indexers and send straight to qBittorrent                                      |
+| Help          | `/help`         | In-app documentation — a step-by-step workflow guide plus a reference section per page                                                     |
+| Settings      | `/settings`     | View/edit runtime configuration and restart the app to apply changes — see below                                                           |
 
-**Auth:** HTTP Basic Auth (`WEB_UI_USER`/`WEB_UI_PASS` in `.env`) protects all six pages plus `/proxy/`* (what Music Search uses to reach Lidarr, Prowlarr, and qBittorrent). The REST API under `/api/v1/*` and `/health` are **intentionally left open** — `lidarr-scripts/on_album_download.py` calls `POST /api/v1/enrich/album` directly from the Lidarr host with no browser involved, and Docker's healthcheck hits `/health` with plain `curl`; neither can answer a login prompt. In practice this means someone with API knowledge and LAN access can still reach the API directly, bypassing the login — a deliberate scope trade-off for a single-operator, LAN-only deployment, not an oversight. Lock down further with a reverse proxy (e.g. Caddy) if you need to expose this beyond your LAN.
+**Auth:** HTTP Basic Auth (`WEB_UI_USER`/`WEB_UI_PASS` in `.env`) protects all eight pages plus `/proxy/`* (what Music Search uses to reach Lidarr, Prowlarr, and qBittorrent). The REST API under `/api/v1/*` and `/health` are **intentionally left open** — `lidarr-scripts/on_album_download.py` calls `POST /api/v1/enrich/album` directly from the Lidarr host with no browser involved, and Docker's healthcheck hits `/health` with plain `curl`; neither can answer a login prompt. In practice this means someone with API knowledge and LAN access can still reach the API directly, bypassing the login — a deliberate scope trade-off for a single-operator, LAN-only deployment, not an oversight. Lock down further with a reverse proxy (e.g. Caddy) if you need to expose this beyond your LAN. `/api/v1/settings/*` is the one exception — it sits behind the same login even on the API side, since nothing external needs to call it and it can change credentials or restart the process.
 
 Every credential Music Search needs (Lidarr/Prowlarr API keys, qBittorrent password) is injected server-side from `.env` — none of it lives in the browser or in any file that could end up committed to this repo.
+
+### Settings & restarting
+
+Everything under `/settings` is read from `.env`/the environment once, at startup — there's no hot-reload, so every change needs a restart to actually apply. Saving a change writes it to `{APP_DATA_DIR}/settings_override.json` (inside the same `./data` volume as everything else — see `.gitignore`, which now excludes `data/` entirely, since this file can hold plaintext secrets), which takes priority over `.env` on the *next* boot. The "Restart Now" button on that page sends the process a graceful `SIGTERM`; Docker's `restart: unless-stopped` policy (or uvicorn's `--reload` supervisor for local dev) brings it back up automatically.

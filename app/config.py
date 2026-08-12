@@ -18,8 +18,10 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, HttpUrl
+from pydantic import Field, HttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.settings_store import read_overrides
 
 
 class Settings(BaseSettings):
@@ -97,6 +99,24 @@ class Settings(BaseSettings):
     # ── Service ─────────────────────────────────────────────────────────────
     app_log_level: str = "INFO"
     app_port: int = 8900
+    # Same idea as Sonarr/Radarr/Lidarr's "URL Base" setting: serve the
+    # entire app (UI, API, static assets, docs) under this path prefix,
+    # so a reverse proxy can pass a subpath straight through with no
+    # rewriting. Empty (default) = served at the root, unchanged from
+    # before this setting existed. e.g. "/music-helper" ->
+    # http://host:8900/music-helper/... Normalised below: leading slash
+    # required, no trailing slash, "" stays "".
+    url_base: str = ""
+
+    @field_validator("url_base")
+    @classmethod
+    def _normalise_url_base(cls, v: str) -> str:
+        v = (v or "").strip().rstrip("/")
+        if not v:
+            return ""
+        if not v.startswith("/"):
+            v = f"/{v}"
+        return v
 
     # ── Derived data-file locations ─────────────────────────────────────────
     @property
@@ -143,8 +163,15 @@ def get_settings() -> Settings:
     Call this from FastAPI dependencies. Direct module-level access via
     `from app.config import settings` works too; the cache makes both
     equivalent.
+
+    Layers ``settings_override.json`` (see app.core.settings_store — the
+    Settings page's saved changes) on top of the environment: pydantic-
+    settings gives constructor kwargs priority over env vars by default,
+    so anything in the override file wins. A field not present in the
+    override file falls through to its normal env var / .env / default,
+    unchanged from before this layer existed.
     """
-    return Settings()
+    return Settings(**read_overrides())
 
 
 settings = get_settings()
