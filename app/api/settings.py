@@ -40,6 +40,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
 from app.config import Settings, settings
+from app.core import connection_tests
 from app.core import settings_store
 from app.core.notifier import Notifier
 from app.models.settings import (
@@ -49,6 +50,8 @@ from app.models.settings import (
     SettingsResponse,
     SettingsUpdateRequest,
     SettingsUpdateResult,
+    TestConnectionRequest,
+    TestConnectionResult,
     TestNotificationRequest,
     TestNotificationResult,
 )
@@ -78,6 +81,16 @@ DISCORD_WEBHOOK_FIELDS: frozenset[str] = frozenset({
     "discord_webhook_artist", "discord_webhook_enrich",
     "discord_webhook_mb_seed_dl", "discord_webhook_mb_seed_beets",
 })
+
+# Which settings fields each POST /test-connection service reads. The
+# button lives on one "anchor" field per service (see settings.html),
+# but the test always uses the whole set.
+CONNECTION_SERVICES: dict[str, tuple[str, ...]] = {
+    "lidarr": ("lidarr_url", "lidarr_api_key"),
+    "prowlarr": ("prowlarr_url", "prowlarr_api_key"),
+    "qbit": ("qbit_url", "qbit_user", "qbit_pass"),
+    "vgmdb": ("vgmdb_url",),
+}
 
 # Filesystem/mount/port-level settings, deliberately NOT exposed for
 # editing here — changing them via this page without also updating the
@@ -316,3 +329,50 @@ def test_notification(req: TestNotificationRequest) -> TestNotificationResult:
         level="info" if ok else "warning",
     )
     return TestNotificationResult(ok=ok, message=message)
+
+
+def _resolve_connection_value(key: str, values: dict[str, str | None]) -> str:
+    """Form value if non-blank, otherwise the live configured value."""
+    raw = values.get(key)
+    if raw is not None and str(raw).strip() != "":
+        return str(raw).strip()
+    live = getattr(settings, key, "")
+    return str(live or "").strip()
+
+
+# ── POST /settings/test-connection ────────────────────────────────────────
+@router.post("/test-connection", response_model=TestConnectionResult)
+def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
+    """Verify Lidarr/Prowlarr/qBittorrent/VGMDB connectivity using the
+    credentials currently in the browser, even if unsaved — same idea as
+    ``POST /test-notification`` for Discord webhooks.
+    """
+    if req.service not in CONNECTION_SERVICES:
+        raise HTTPException(400, f"unknown service: {req.service!r}")
+
+    resolved = {
+        key: _resolve_connection_value(key, req.values)
+        for key in CONNECTION_SERVICES[req.service]
+    }
+
+    if req.service == "lidarr":
+        ok, message = connection_tests.test_lidarr(
+            resolved["lidarr_url"], resolved["lidarr_api_key"],
+        )
+    elif req.service == "prowlarr":
+        ok, message = connection_tests.test_prowlarr(
+            resolved["prowlarr_url"], resolved["prowlarr_api_key"],
+        )
+    elif req.service == "qbit":
+        ok, message = connection_tests.test_qbit(
+            resolved["qbit_url"], resolved["qbit_user"], resolved["qbit_pass"],
+        )
+    else:
+        ok, message = connection_tests.test_vgmdb(resolved["vgmdb_url"])
+
+    db.add_activity(
+        "settings",
+        f"test connection ({req.service}): {'ok' if ok else 'failed'} — {message}",
+        level="info" if ok else "warning",
+    )
+    return TestConnectionResult(ok=ok, message=message)

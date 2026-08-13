@@ -89,3 +89,21 @@ class TestNotificationRequest(BaseModel):
 class TestNotificationResult(BaseModel):
     ok: bool
     message: str = Field(description="Human-readable result, shown next to the Send Test button either way.")
+
+
+class TestConnectionRequest(BaseModel):
+    """Body for ``POST /settings/test-connection``."""
+
+    service: str = Field(
+        description="Which integration to test: 'lidarr', 'prowlarr', 'qbit', or 'vgmdb'.",
+    )
+    values: dict[str, str | None] = Field(
+        default_factory=dict,
+        description="Current form values for the service's fields. Blank/omitted "
+        "entries fall back to whatever is already configured.",
+    )
+
+
+class TestConnectionResult(BaseModel):
+    ok: bool
+    message: str = Field(description="Human-readable result, shown next to the Test Connection button.")

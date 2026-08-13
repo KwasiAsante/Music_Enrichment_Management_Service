@@ -13,6 +13,10 @@
  * or waiting for a real event to trigger it. If the input's blank, the
  * backend falls back to whatever's already configured.
  *
+ * Test Connection (Lidarr/Prowlarr/qBittorrent/VGMDB): POSTs the current
+ * form values for that service to /api/v1/settings/test-connection.
+ * Blank secret fields mean "use whatever's already configured".
+ *
  * Restart: confirms, POSTs /api/v1/settings/restart (which schedules a
  * graceful SIGTERM ~0.5s out — see that endpoint for why), then polls
  * GET /health every second until it responds again (Docker's restart
@@ -24,11 +28,21 @@
  * validation) and needs a look at the container logs.
  */
 
+const CONNECTION_FIELDS = {
+  lidarr: ['lidarr_url', 'lidarr_api_key'],
+  prowlarr: ['prowlarr_url', 'prowlarr_api_key'],
+  qbit: ['qbit_url', 'qbit_user', 'qbit_pass'],
+  vgmdb: ['vgmdb_url'],
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('settings-form')?.addEventListener('submit', handleSave);
   document.getElementById('restart-btn')?.addEventListener('click', handleRestart);
   document.querySelectorAll('.settings-test-btn').forEach((btn) => {
     btn.addEventListener('click', () => handleTestNotification(btn));
+  });
+  document.querySelectorAll('.settings-test-connection-btn').forEach((btn) => {
+    btn.addEventListener('click', () => handleTestConnection(btn));
   });
 });
 
@@ -105,6 +119,42 @@ async function handleTestNotification(btn) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Send Test';
+  }
+}
+
+async function handleTestConnection(btn) {
+  const service = btn.dataset.testService;
+  const resultKey = btn.dataset.testResultKey;
+  const resultEl = document.getElementById(`test-result-${resultKey}`);
+  const fields = CONNECTION_FIELDS[service] || [];
+  const values = {};
+
+  fields.forEach((key) => {
+    const input = document.getElementById(`field-${key}`);
+    if (input) values[key] = input.value;
+  });
+
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  resultEl.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/v1/settings/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service, values }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `request failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML = data.ok
+      ? `<span class="badge badge-green">connected</span> <span>${escapeHtml(data.message)}</span>`
+      : `<span class="badge badge-red">failed</span> <span>${escapeHtml(data.message)}</span>`;
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test Connection';
   }
 }
 

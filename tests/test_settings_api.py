@@ -161,3 +161,69 @@ def test_restart_schedules_delayed_sigterm(client: TestClient, auth):
         args = mock_kill.call_args[0]
         assert args[0] == os.getpid()
         assert args[1] == signal.SIGTERM
+
+
+# ── test-connection ─────────────────────────────────────────────────────
+def test_test_connection_requires_auth(client: TestClient):
+    r = client.post("/api/v1/settings/test-connection", json={"service": "lidarr"})
+    assert r.status_code == 401
+
+
+def test_test_connection_rejects_unknown_service(client: TestClient, auth):
+    r = client.post(
+        "/api/v1/settings/test-connection",
+        json={"service": "not-real"},
+        auth=auth,
+    )
+    assert r.status_code == 400
+
+
+def test_test_connection_lidarr_uses_form_values(client: TestClient, auth, monkeypatch):
+    from app.core import connection_tests
+
+    captured: dict[str, str] = {}
+
+    def fake_test(url: str, api_key: str) -> tuple[bool, str]:
+        captured["url"] = url
+        captured["api_key"] = api_key
+        return True, "Connected — Lidarr v1.0."
+
+    monkeypatch.setattr(connection_tests, "test_lidarr", fake_test)
+
+    r = client.post(
+        "/api/v1/settings/test-connection",
+        json={
+            "service": "lidarr",
+            "values": {
+                "lidarr_url": "http://lidarr.test",
+                "lidarr_api_key": "typed-key",
+            },
+        },
+        auth=auth,
+    )
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "message": "Connected — Lidarr v1.0."}
+    assert captured == {"url": "http://lidarr.test", "api_key": "typed-key"}
+
+
+def test_test_connection_blank_secret_falls_back_to_settings(client: TestClient, auth, monkeypatch):
+    from app.core import connection_tests
+
+    captured: dict[str, str] = {}
+
+    def fake_test(url: str, api_key: str) -> tuple[bool, str]:
+        captured["url"] = url
+        captured["api_key"] = api_key
+        return False, "nope"
+
+    monkeypatch.setattr("app.config.settings.lidarr_url", "http://saved.test")
+    monkeypatch.setattr("app.config.settings.lidarr_api_key", "saved-key")
+    monkeypatch.setattr(connection_tests, "test_lidarr", fake_test)
+
+    r = client.post(
+        "/api/v1/settings/test-connection",
+        json={"service": "lidarr", "values": {"lidarr_api_key": ""}},
+        auth=auth,
+    )
+    assert r.status_code == 200
+    assert captured == {"url": "http://saved.test", "api_key": "saved-key"}

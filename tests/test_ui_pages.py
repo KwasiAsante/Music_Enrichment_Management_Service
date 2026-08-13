@@ -92,15 +92,23 @@ def test_album_detail_not_found_is_graceful(client: TestClient, auth):
     assert "Album not found" in r.text
 
 
-def test_settings_page_send_test_only_on_discord_webhook_fields(client: TestClient, auth):
+def test_settings_page_has_test_buttons_for_integrations(client: TestClient, auth):
     r = client.get("/settings", auth=auth)
     text = r.text
 
     assert text.count('data-test-key="discord_webhook_') == 4
     assert text.count("Send Test") == 4
-    # a non-webhook secret field (e.g. lidarr_api_key) must not get one
-    assert 'data-test-key="lidarr_api_key"' not in text
+    assert 'data-test-service="lidarr"' in text
+    assert 'data-test-service="prowlarr"' in text
+    assert 'data-test-service="qbit"' in text
+    assert 'data-test-service="vgmdb"' in text
+    assert text.count("Test Connection") == 4
     assert 'id="test-result-discord_webhook_artist"' in text
+    assert 'id="test-result-lidarr_api_key"' in text
+    assert 'id="test-result-vgmdb_url"' in text
+    # secrets without a test action stay plain inputs
+    assert 'data-test-key="lidarr_api_key"' not in text
+    assert 'data-test-key="web_ui_pass"' not in text
 
 
 def test_theme_toggle_present_and_anti_fouc_ordering(client: TestClient, auth):

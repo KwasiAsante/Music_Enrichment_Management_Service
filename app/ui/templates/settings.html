@@ -38,6 +38,12 @@
 <div id="save-result" class="import-result"></div>
 
 <form id="settings-form">
+  {% set connection_test_fields = {
+    'lidarr_api_key': 'lidarr',
+    'prowlarr_api_key': 'prowlarr',
+    'qbit_pass': 'qbit',
+    'vgmdb_url': 'vgmdb',
+  } %}
   {% for group in view.groups %}
   <section class="settings-section">
     <div class="section-label">{{ group.name }}</div>
@@ -73,13 +79,33 @@
               <button type="button" class="btn btn-ghost btn-sm settings-test-btn" data-test-key="{{ field.key }}">Send Test</button>
             </div>
             <div class="settings-test-result" id="test-result-{{ field.key }}"></div>
+            {% elif field.key in connection_test_fields %}
+            <div class="settings-input-row">
+              <input type="password" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="password"
+                     placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
+                     autocomplete="new-password">
+              <button type="button" class="btn btn-ghost btn-sm settings-test-connection-btn"
+                      data-test-service="{{ connection_test_fields[field.key] }}"
+                      data-test-result-key="{{ field.key }}">Test Connection</button>
+            </div>
+            <div class="settings-test-result" id="test-result-{{ field.key }}"></div>
             {% else %}
             <input type="password" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="password"
                    placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
                    autocomplete="new-password">
             {% endif %}
           {% elif field.field_type == "text" %}
+            {% if field.key in connection_test_fields %}
+            <div class="settings-input-row">
+              <input type="text" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="text" value="{{ field.value or '' }}">
+              <button type="button" class="btn btn-ghost btn-sm settings-test-connection-btn"
+                      data-test-service="{{ connection_test_fields[field.key] }}"
+                      data-test-result-key="{{ field.key }}">Test Connection</button>
+            </div>
+            <div class="settings-test-result" id="test-result-{{ field.key }}"></div>
+            {% else %}
             <input type="text" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="text" value="{{ field.value or '' }}">
+            {% endif %}
           {% endif %}
         </div>
       </div>
