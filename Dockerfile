@@ -72,4 +72,10 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # app.main:asgi_app, not app.main:app — asgi_app is `app` itself when
 # URL_BASE is unset (the default), or `app` wrapped under that prefix
 # when it's set. See app/main.py.
-CMD ["uvicorn", "app.main:asgi_app", "--host", "0.0.0.0", "--port", "8900"]
+#
+# --proxy-headers/--forwarded-allow-ips: trust X-Forwarded-Proto from the
+# reverse proxy (Caddy terminates TLS and talks to this container over
+# plain HTTP), so url_for()-generated absolute URLs (static assets, see
+# base.html) come out as https:// instead of http:// and don't get
+# blocked as mixed content by the browser.
+CMD ["uvicorn", "app.main:asgi_app", "--host", "0.0.0.0", "--port", "8900", "--proxy-headers", "--forwarded-allow-ips=*"]
