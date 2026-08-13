@@ -102,9 +102,10 @@ def test_settings_page_has_test_buttons_for_integrations(client: TestClient, aut
     assert 'data-test-service="prowlarr"' in text
     assert 'data-test-service="qbit"' in text
     assert 'data-test-service="vgmdb"' in text
-    assert text.count("Test Connection") == 4
+    assert text.count("Test Connection") == 5
     assert 'id="test-result-discord_webhook_artist"' in text
     assert 'id="test-result-lidarr_api_key"' in text
+    assert 'id="test-result-qbit_api_key"' in text
     assert 'id="test-result-vgmdb_url"' in text
     # secrets without a test action stay plain inputs
     assert 'data-test-key="lidarr_api_key"' not in text
