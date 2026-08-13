@@ -634,7 +634,7 @@ class BeetsEnricher:
     ) -> tuple[bool, str]:
         cmd = [
             settings.beet_bin, "import",
-            "--nocopy", "--noincremental", "--write",
+            "--nocopy", "--noincremental", "--noresume", "--write",
             "-S", f"vgmdb:{vgmdb_id}",
             str(album_folder),
         ]
@@ -764,6 +764,13 @@ class BeetsEnricher:
             return "missing path on disk during beet import"
         if "timeout" in lower:
             return "beet import timed out"
+        if "was interrupted" in lower and "stdin stream ended" in lower:
+            return (
+                "beet import hit an interrupted-import resume prompt "
+                "(non-interactive run cannot answer Y/n)"
+            )
+        if "stdin stream ended while input required" in lower:
+            return "beet import needed interactive input (non-interactive run)"
         if "no candidates" in lower:
             return "no VGMDB candidates found"
         if (
