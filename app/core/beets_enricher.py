@@ -241,7 +241,7 @@ class BeetsEnricher:
             }
 
         # ── beet remove + import ────────────────────────────────────────
-        self._beet_remove(album_folder)
+        self._beet_remove(album_folder, vgmdb_id=vgmdb_id)
         ok, raw_output = self._beet_import(album_folder, vgmdb_id)
         output = strip_ansi(raw_output)
         match_pct = parse_match_percentage(output)
@@ -597,17 +597,37 @@ class BeetsEnricher:
         env["BEETSDIR"] = str(settings.beetsdir)
         return env
 
-    def _beet_remove(self, album_folder: Path) -> bool:
+    def _beet_remove(self, album_folder: Path, *, vgmdb_id: str | None = None) -> bool:
+        """Drop any existing beets-library entry before re-importing.
+
+        Removes by ``vgmdb_id`` first so a folder rename/move (common after
+        Lidarr/Picard retags) does not leave a stale path in the beets DB
+        that blocks import with "already in the library" + missing files.
+        """
+        removed = False
+        if vgmdb_id:
+            cmd = [
+                settings.beet_bin, "remove", "-a", "-f",
+                f"vgmdb_id:{vgmdb_id}",
+            ]
+            try:
+                r = _subprocess_run(
+                    cmd, capture_output=True, text=True, timeout=30,
+                    env=self._beet_env(),
+                )
+                removed = r.returncode == 0
+            except Exception as exc:  # noqa: BLE001
+                log.debug("beet remove by vgmdb_id failed (non-fatal): %s", exc)
         cmd = [settings.beet_bin, "remove", "-a", "-f", f"path:{album_folder}"]
         try:
             r = _subprocess_run(
                 cmd, capture_output=True, text=True, timeout=30,
                 env=self._beet_env(),
             )
-            return r.returncode == 0
+            return removed or r.returncode == 0
         except Exception as exc:  # noqa: BLE001
             log.debug("beet remove failed (non-fatal): %s", exc)
-            return False
+            return removed
 
     def _beet_import(
         self, album_folder: Path, vgmdb_id: str,
@@ -724,11 +744,24 @@ class BeetsEnricher:
     def _classify_failure(output: str) -> str:
         """Best-guess reason from beet's stderr / stdout when returncode != 0."""
         lower = output.lower()
-        if "beet binary not found" in lower or "no such file or directory" in lower:
+        if "beet binary not found at" in lower:
             return (
                 f"beet binary not found at {settings.beet_bin!r} "
                 "— check BEET_BIN in .env (use /usr/local/bin/beet in Docker)"
             )
+        if "already in the library" in lower and (
+            "could not get filesize" in lower
+            or "no such file or directory" in lower
+        ):
+            return (
+                "beets library has a stale entry at an old folder path "
+                "(album was moved or renamed) — remove the old beets entry "
+                "and retry enrichment"
+            )
+        if "could not get filesize" in lower:
+            return "missing audio files on disk (beet could not read track paths)"
+        if "no such file or directory" in lower:
+            return "missing path on disk during beet import"
         if "timeout" in lower:
             return "beet import timed out"
         if "no candidates" in lower:
