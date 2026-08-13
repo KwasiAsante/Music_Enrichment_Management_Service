@@ -167,14 +167,46 @@ class PicardExporter:
         }
 
     # ── internal ────────────────────────────────────────────────────────
+    @staticmethod
+    def _artist_name_from_library_path(given: str | Path) -> str | None:
+        """Extract the artist folder name from any path that contains the
+        ``…/synced_music/Artist/<name>/…`` segment.
+
+        Picard often reports a host/container path (e.g. ``/storage/…``)
+        while the helper sees the library under ``app_music_dir`` (e.g.
+        ``/music/…``). Matching on this stable tail avoids needing the
+        roots to line up.
+        """
+        parts = Path(str(given)).parts
+        for i in range(len(parts) - 2):
+            if parts[i].casefold() == "synced_music" and parts[i + 1].casefold() == "artist":
+                return parts[i + 2]
+        return None
+
+    def _match_artist_folder_by_name(self, name: str) -> Path | None:
+        """Return ``artist_root / name``, with a case-insensitive fallback."""
+        if not self.artist_root.exists():
+            return None
+
+        direct = self.artist_root / name
+        if direct.is_dir():
+            return direct
+
+        target = name.casefold()
+        for folder in self.artist_root.iterdir():
+            if folder.is_dir() and folder.name.casefold() == target:
+                return folder
+        return None
+
     def _resolve_artist_folder(self, given: str | Path) -> Path | None:
         """Return the on-disk artist folder.
 
         Resolution order:
-        1. ``given`` itself, if it is an existing artist folder.
-        2. Walk up from ``given`` (file or folder) until a direct child of
-           ``artist_root`` is found — handles multi-disc layouts such as
-           ``Artist/Album/CD 01/``.
+        1. Walk up from ``given`` when it exists on disk until a direct
+           child of ``artist_root`` is found.
+        2. Parse ``…/synced_music/Artist/<name>/…`` from the path string
+           and map ``<name>`` under ``artist_root`` — handles Picard host
+           paths like ``/storage/…`` vs helper paths like ``/music/…``.
         3. ``artist_root / basename(given)`` for bare-name inputs.
         """
         p = Path(str(given))
@@ -188,12 +220,18 @@ class PicardExporter:
                     break
                 current = current.parent
 
-        if p.is_absolute() and p.exists() and p.is_dir():
-            return p
+            if p.is_dir():
+                return p
 
-        candidate = self.artist_root / p.name
-        if candidate.exists() and candidate.is_dir():
-            return candidate
+        artist_name = self._artist_name_from_library_path(p)
+        if artist_name:
+            matched = self._match_artist_folder_by_name(artist_name)
+            if matched is not None:
+                return matched
+
+        matched = self._match_artist_folder_by_name(p.name)
+        if matched is not None:
+            return matched
         return None
 
     def _load_existing_dict(self) -> dict[str, dict]:
