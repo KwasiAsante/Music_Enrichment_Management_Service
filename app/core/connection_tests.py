@@ -68,16 +68,31 @@ def test_prowlarr(url: str, api_key: str) -> tuple[bool, str]:
         return False, f"Request failed: {exc}"
 
 
-def test_qbit(url: str, username: str, password: str) -> tuple[bool, str]:
+def test_qbit(
+    url: str,
+    username: str,
+    password: str,
+    api_key: str = "",
+) -> tuple[bool, str]:
     if not url:
         return False, "qBittorrent URL is not set."
-    if not username:
-        return False, "qBittorrent username is not set."
-    if not _is_configured(password):
-        return False, "qBittorrent password is not set."
 
     base = url.rstrip("/")
     try:
+        if _is_configured(api_key):
+            version = httpx.get(
+                f"{base}/api/v2/app/version",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10.0,
+            )
+            version.raise_for_status()
+            return True, f"Connected — qBittorrent v{version.text.strip()} (API key)."
+
+        if not username:
+            return False, "qBittorrent username is not set."
+        if not _is_configured(password):
+            return False, "qBittorrent password is not set (or configure an API key)."
+
         login = httpx.post(
             f"{base}/api/v2/auth/login",
             data={"username": username, "password": password},
