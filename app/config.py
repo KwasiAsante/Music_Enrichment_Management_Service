@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     qbit_url: str = "http://192.168.2.130:8080"
     qbit_user: str = "admin"
     qbit_pass: str = Field(default="PLACEHOLDER_ME")
+    # Optional — qBittorrent v5.2+ supports stateless Bearer auth. When set,
+    # username/password login is skipped (see app/api/proxy.py).
+    qbit_api_key: str = ""
     qbit_save_path: str = "/downloads/servarr-downloads"
 
     # ── VGMDB ───────────────────────────────────────────────────────────────
@@ -140,6 +143,10 @@ class Settings(BaseSettings):
         return self.app_data_dir / "app.db"
 
     # ── Convenience predicates ──────────────────────────────────────────────
+    def qbit_uses_api_key(self) -> bool:
+        """True when a real qBittorrent Web API key is configured."""
+        return bool(self.qbit_api_key) and self.qbit_api_key != "PLACEHOLDER_ME"
+
     def placeholder_fields(self) -> list[str]:
         """Return the names of any required secret fields still left as
         the PLACEHOLDER_ME sentinel. Used by main.py at startup to log a

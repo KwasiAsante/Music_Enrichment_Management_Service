@@ -482,14 +482,19 @@ async function prowlarrDownload(key) {
 
   try {
     // Login to qBittorrent via proxy — the proxy ignores whatever body we
-    // send here and always logs in with the server-configured account.
+    // send here and always logs in with the server-configured account (or
+    // stubs success when a server-side API key is configured instead).
     const loginRes = await fetch(`${proxyQbit}/api/v2/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'username=&password='
     });
     const loginTxt = await loginRes.text();
-    if (loginTxt !== 'Ok.') throw new Error(`qBittorrent login failed: ${loginTxt}`);
+    // qBittorrent 5.2+ returns 204 with an empty body on success; older versions
+    // return 200 with body "Ok.". Wrong credentials still return "Fails." (legacy)
+    // or a non-2xx status (5.2+).
+    const loginOk = loginRes.ok && (loginRes.status === 204 || loginTxt === 'Ok.');
+    if (!loginOk) throw new Error(`qBittorrent login failed: ${loginTxt || loginRes.status}`);
 
     // Use guid as magnet if it starts with magnet:, otherwise use downloadUrl
     const magnet = r.guid?.startsWith('magnet:') ? r.guid : (r.downloadUrl || r.magnetUrl);
@@ -502,8 +507,21 @@ async function prowlarrDownload(key) {
       body: `urls=${encodeURIComponent(magnet)}&savepath=${encodeURIComponent(savepath)}&category=lidarr`
     });
     const addTxt = await addRes.text();
-    if (addTxt === 'Fails.') throw new Error('Torrent already exists in qBittorrent, or save path is invalid');
-    if (addTxt !== 'Ok.') throw new Error(`Add torrent failed: ${addTxt}`);
+    const addContentType = addRes.headers.get('content-type') || '';
+    if (addContentType.includes('application/json')) {
+      // qBittorrent 5.2+ returns JSON with success/pending/failure counts.
+      const data = JSON.parse(addTxt);
+      const allFailed = data.failure_count > 0 && !data.success_count && !data.pending_count;
+      if (addRes.status === 409 || allFailed) {
+        throw new Error('Torrent already exists in qBittorrent, or save path is invalid');
+      }
+      if (!addRes.ok && addRes.status !== 202) {
+        throw new Error(`Add torrent failed: ${addTxt}`);
+      }
+    } else {
+      if (addTxt === 'Fails.') throw new Error('Torrent already exists in qBittorrent, or save path is invalid');
+      if (addTxt !== 'Ok.') throw new Error(`Add torrent failed: ${addTxt}`);
+    }
 
     log('prl-log', '✓ Added to qBittorrent!', 'ok');
     log('prl-log', `Category: lidarr (Lidarr will pick it up automatically)`, 'ok');

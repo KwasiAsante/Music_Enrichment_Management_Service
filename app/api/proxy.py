@@ -18,7 +18,10 @@ any client-supplied ``apikey`` query param and inject the real one from
 ``app.ui.router``, Phase 2) sends no key at all. The qBittorrent login path
 is special-cased the same way: whatever the client posts to
 ``/proxy/qbit/api/v2/auth/login`` is ignored, and the proxy always logs in
-with ``settings.qbit_user``/``settings.qbit_pass`` instead. This used to be
+with ``settings.qbit_user``/``settings.qbit_pass`` instead — unless
+``settings.qbit_api_key`` is set, in which case login is skipped entirely
+and every request is authenticated via ``Authorization: Bearer …`` (qBittorrent
+v5.2+ API key auth). This used to be
 the other way around — real keys and a real password shipped as default
 values in the static ``music-search.html`` file, readable via view-source
 by anyone with network access to the page. Since every one of these
@@ -91,17 +94,24 @@ async def _forward(
     request: Request,
     target_url: str,
     override_body: bytes | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> Response:
     """Forward ``request`` to ``target_url`` and return the upstream's response.
 
     ``override_body``, when given, replaces the request's own body entirely
     — used by the qBittorrent login special-case below so the real password
     never needs to be read from (or exist in) the browser.
+
+    ``extra_headers`` are merged in last (overriding any client-supplied
+    values with the same name) — used to inject the server-side qBittorrent
+    API key without exposing it to the browser.
     """
     headers = {
         k: v for k, v in request.headers.items()
         if k.lower() in _FORWARD_REQUEST_HEADERS
     }
+    if extra_headers:
+        headers.update(extra_headers)
     body = override_body if override_body is not None else await request.body()
 
     try:
@@ -183,7 +193,20 @@ async def proxy_qbit(path: str, request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
 
+    target = _join(settings.qbit_url, path, request.url.query)
+    qbit_auth = (
+        {"Authorization": f"Bearer {settings.qbit_api_key}"}
+        if settings.qbit_uses_api_key()
+        else None
+    )
+
     if request.method == "POST" and path.rstrip("/") == "api/v2/auth/login":
+        if settings.qbit_uses_api_key():
+            # API keys cannot hit auth endpoints — the browser still calls
+            # login for cookie-based flow, so stub success when key auth is on.
+            response_headers = dict(_CORS_HEADERS)
+            return Response(status_code=204, headers=response_headers)
+
         # Always log in with the server-configured account, regardless of
         # what (if anything) the client posted here.
         login_body = (
@@ -191,8 +214,8 @@ async def proxy_qbit(path: str, request: Request) -> Response:
         ).encode()
         return await _forward(
             request,
-            _join(settings.qbit_url, path, request.url.query),
+            target,
             override_body=login_body,
         )
 
-    return await _forward(request, _join(settings.qbit_url, path, request.url.query))
+    return await _forward(request, target, extra_headers=qbit_auth)

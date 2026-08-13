@@ -68,7 +68,7 @@ router = APIRouter(
 # written, never read back. Discord webhook URLs are included: the URL
 # itself IS the credential (anyone with it can post to the channel).
 SECRET_FIELDS: frozenset[str] = frozenset({
-    "lidarr_api_key", "prowlarr_api_key", "qbit_pass", "web_ui_pass",
+    "lidarr_api_key", "prowlarr_api_key", "qbit_pass", "qbit_api_key", "web_ui_pass",
     "github_token", "discord_webhook_artist", "discord_webhook_enrich",
     "discord_webhook_mb_seed_dl", "discord_webhook_mb_seed_beets",
 })
@@ -88,7 +88,7 @@ DISCORD_WEBHOOK_FIELDS: frozenset[str] = frozenset({
 CONNECTION_SERVICES: dict[str, tuple[str, ...]] = {
     "lidarr": ("lidarr_url", "lidarr_api_key"),
     "prowlarr": ("prowlarr_url", "prowlarr_api_key"),
-    "qbit": ("qbit_url", "qbit_user", "qbit_pass"),
+    "qbit": ("qbit_url", "qbit_user", "qbit_pass", "qbit_api_key"),
     "vgmdb": ("vgmdb_url",),
 }
 
@@ -143,6 +143,9 @@ FIELD_CATALOG: list[tuple[str, str, str, str, list[str] | None, str | None]] = [
     ("qbit_url", "qBittorrent URL", "qBittorrent", "text", None, None),
     ("qbit_user", "qBittorrent Username", "qBittorrent", "text", None, None),
     ("qbit_pass", "qBittorrent Password", "qBittorrent", "password", None, None),
+    ("qbit_api_key", "qBittorrent API Key", "qBittorrent", "password", None,
+     "Optional. qBittorrent v5.2+ — generate in Web UI → Preferences → Web UI. "
+     "When set, API key auth is used instead of username/password."),
     ("qbit_save_path", "qBittorrent Save Path", "qBittorrent", "text", None, None),
 
     ("vgmdb_url", "VGMDB API URL", "VGMDB", "text", None, None),
@@ -365,7 +368,10 @@ def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
         )
     elif req.service == "qbit":
         ok, message = connection_tests.test_qbit(
-            resolved["qbit_url"], resolved["qbit_user"], resolved["qbit_pass"],
+            resolved["qbit_url"],
+            resolved["qbit_user"],
+            resolved["qbit_pass"],
+            resolved["qbit_api_key"],
         )
     else:
         ok, message = connection_tests.test_vgmdb(resolved["vgmdb_url"])

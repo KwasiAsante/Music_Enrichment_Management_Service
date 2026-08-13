@@ -31,7 +31,7 @@
 const CONNECTION_FIELDS = {
   lidarr: ['lidarr_url', 'lidarr_api_key'],
   prowlarr: ['prowlarr_url', 'prowlarr_api_key'],
-  qbit: ['qbit_url', 'qbit_user', 'qbit_pass'],
+  qbit: ['qbit_url', 'qbit_user', 'qbit_pass', 'qbit_api_key'],
   vgmdb: ['vgmdb_url'],
 };
 
