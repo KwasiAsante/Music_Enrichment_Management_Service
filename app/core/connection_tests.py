@@ -110,7 +110,7 @@ def test_vgmdb(url: str) -> tuple[bool, str]:
     base = url.rstrip("/")
     try:
         r = httpx.get(
-            f"{base}/search/albums/a",
+            f"{base}/albumlist/A",
             params={"format": "json"},
             headers=_HEADERS,
             timeout=10.0,
