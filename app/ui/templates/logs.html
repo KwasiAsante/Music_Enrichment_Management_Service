@@ -6,29 +6,38 @@
   <div>
     <div class="eyebrow">▸ Activity</div>
     <h1>Logs</h1>
-    <p class="page-sub">Last <span id="log-count">{{ rows | length }}</span> entries</p>
+    <p class="page-sub">Last <span id="log-count">{{ rows | length }}</span> entries · UI level ≥ {{ web_ui_log_level | lower }}</p>
   </div>
 </div>
 
 {% set tip_key = "logs" %}
-{% set tip_text = "Every scan, mapping change, and enrichment run shows up here — the fastest place to see what actually happened." %}
+{% set tip_text = "Set Web UI Log Level to DEBUG in Settings to see verbose diagnostic detail here — subprocess output, search steps, and per-album scan lines." %}
 {% set tip_href = url_base ~ "/help#logs" %}
 {% include "_tip_banner.html" %}
 
 <div class="filter-bar">
   <div class="cf">
-    <label>Category</label>
-    <select id="filter-category">
+    <label>Source</label>
+    <select id="filter-source">
+      <option value="all">All</option>
+      <option value="activity">Activity</option>
+      <option value="diagnostic">Diagnostic</option>
+    </select>
+  </div>
+  <div class="cf">
+    <label>Feature</label>
+    <select id="filter-feature">
       <option value="">All</option>
-      {% for c in categories %}
-      <option value="{{ c }}">{{ c }}</option>
+      {% for f in features %}
+      <option value="{{ f }}">{{ f }}</option>
       {% endfor %}
     </select>
   </div>
   <div class="cf">
-    <label>Level</label>
+    <label>Level ≥</label>
     <select id="filter-level">
-      <option value="">All</option>
+      <option value="">Default ({{ web_ui_log_level | lower }})</option>
+      <option value="debug">debug</option>
       <option value="info">info</option>
       <option value="warning">warning</option>
       <option value="error">error</option>
@@ -36,19 +45,19 @@
   </div>
   <div class="cf" style="flex:1">
     <label>Artist</label>
-    <input type="text" id="filter-artist" placeholder="Exact artist name...">
+    <input type="text" id="filter-artist" placeholder="Exact artist name (activity only)...">
   </div>
   <button class="btn btn-ghost" type="button" id="refresh-btn">Refresh</button>
 </div>
 
 <section>
-  <div class="section-label">Activity Log</div>
+  <div class="section-label">Log Feed</div>
   <div class="log" id="log-view" style="max-height:520px;">
     {% for item in rows %}
     <div class="log-line">
       <span class="lt">{{ item.ts }}</span>
-      <span class="{{ 'lerr' if item.level == 'error' else 'lwarn' if item.level == 'warning' else 'linfo' }}">
-        [{{ item.category }}]
+      <span class="{{ 'lerr' if item.level == 'error' else 'lwarn' if item.level == 'warning' else 'ldebug' if item.level == 'debug' else 'linfo' }}">
+        [{{ item.feature or item.category }}{% if item.source == 'diagnostic' %} · diag{% endif %}]
         {%- if item.artist %} {{ item.artist }}{% if item.album %} — {{ item.album }}{% endif %}:{% endif %}
         {{ item.message }}
       </span>

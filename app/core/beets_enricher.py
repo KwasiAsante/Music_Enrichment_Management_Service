@@ -522,13 +522,21 @@ class BeetsEnricher:
         if mb_release_id in mapping:
             entry = mapping[mb_release_id]
             if entry.get("vgmdb_id") == "skip":
+                log.debug("vgmdb resolve: skip sentinel for %s", mb_release_id)
                 return None, "skip_sentinel", "explicitly skip-mapped"
-            return entry.get("vgmdb_id"), "mapping", None
+            vgmdb_id = entry.get("vgmdb_id")
+            log.debug("vgmdb resolve: mapping hit %s → %s", mb_release_id, vgmdb_id)
+            return vgmdb_id, "mapping", None
 
         if mb_release_id.startswith("vgmdb-"):
-            return mb_release_id.removeprefix("vgmdb-"), "mb_release_id_prefix", None
+            vgmdb_id = mb_release_id.removeprefix("vgmdb-")
+            log.debug("vgmdb resolve: mb prefix %s → %s", mb_release_id, vgmdb_id)
+            return vgmdb_id, "mb_release_id_prefix", None
 
         if not allow_search:
+            log.debug(
+                "vgmdb resolve: no mapping for %s (search disabled)", mb_release_id,
+            )
             return None, "not_found", "no VGMDB mapping found"
 
         # On-the-fly resolution (Lidarr hook path).
@@ -610,12 +618,18 @@ class BeetsEnricher:
             "-S", f"vgmdb:{vgmdb_id}",
             str(album_folder),
         ]
+        log.debug("beet import: %s", " ".join(cmd))
         try:
             r = _subprocess_run(
                 cmd, input="a\n", capture_output=True, text=True,
                 timeout=300, env=self._beet_env(),
             )
-            return r.returncode == 0, (r.stdout + r.stderr).strip()
+            output = (r.stdout + r.stderr).strip()
+            log.debug(
+                "beet import finished (rc=%s, %d bytes output):\n%s",
+                r.returncode, len(output), output,
+            )
+            return r.returncode == 0, output
         except subprocess.TimeoutExpired:
             return False, "timeout"
         except FileNotFoundError as exc:

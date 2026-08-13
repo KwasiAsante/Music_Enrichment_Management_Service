@@ -131,7 +131,7 @@
     <li><strong>Scan Library</strong> rebuilds the album list from what's actually on disk. Tick <strong>also remove empty folders</strong> to also delete album/artist folders with no files or no audio — this is destructive, so it's opt-in.</li>
     <li><strong>Fix Artist Paths</strong> normalizes artist folder names (e.g. kanji → romanized) where that's been configured.</li>
     <li><strong>Run Enrichment</strong> is a shortcut straight to the <a href="{{ url_base }}/enrich">Enrich</a> page.</li>
-    <li><strong>Recent Activity</strong> shows the latest log entries across every category, filterable by category — the same underlying log as the full <a href="{{ url_base }}/logs">Logs</a> page, just the tail end of it.</li>
+    <li><strong>Recent Activity</strong> shows the latest log entries across every feature, filterable by feature — the same underlying log as the full <a href="{{ url_base }}/logs">Logs</a> page, just the tail end of it.</li>
   </ul>
 </section>
 
@@ -173,8 +173,10 @@
   <h2><span class="icon">≡</span> Logs</h2>
   <p class="help-intro">The full activity history — every scan, mapping change, enrichment run, and error, in one filterable feed.</p>
   <ul class="help-list">
-    <li>Filter by <strong>Category</strong> (scan, mapping, enrich, etc.), <strong>Level</strong> (info/warning/error), or an exact <strong>Artist</strong> name.</li>
+    <li>Filter by <strong>Source</strong> (activity summaries vs diagnostic detail), <strong>Feature</strong> (enrich, scan, mapping, etc.), <strong>Level</strong> (minimum level — debug shows the most detail), or an exact <strong>Artist</strong> name (activity rows only).</li>
     <li><strong>Refresh</strong> pulls the latest entries — the page doesn't auto-poll, so use it after kicking off something elsewhere.</li>
+    <li>Set <strong>Web UI Log Level</strong> to DEBUG on the Settings page (or <code>APP_WEB_UI_LOG_LEVEL=DEBUG</code> in <code>.env</code>) to include verbose diagnostic lines from the feature log files. At INFO, only summaries appear.</li>
+    <li>Diagnostic entries are also written to <code>{APP_DATA_DIR}/logs/</code> (default <code>/data/logs/</code> in Docker) for tailing outside the browser.</li>
   </ul>
 </section>
 
@@ -218,7 +220,7 @@
 
   <div class="faq-item">
     <div class="faq-q">Something looks wrong and I'm not sure why.</div>
-    <div class="faq-a">The <a href="{{ url_base }}/logs">Logs</a> page has a full, filterable history of everything the app has done — scans, mapping changes, enrichment runs, and any errors along the way. It's usually the fastest way to see what actually happened.</div>
+    <div class="faq-a">The <a href="{{ url_base }}/logs">Logs</a> page merges activity summaries with diagnostic detail from feature log files. Set <strong>Web UI Log Level</strong> to DEBUG in Settings to see verbose output (subprocess traces, search steps) in the browser. Filter by feature and level to narrow things down. Files under <code>/data/logs/</code> remain available for tailing outside the UI.</div>
   </div>
 </section>
 {% endblock %}

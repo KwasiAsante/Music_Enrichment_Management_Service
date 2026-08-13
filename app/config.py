@@ -101,6 +101,12 @@ class Settings(BaseSettings):
 
     # ── Service ─────────────────────────────────────────────────────────────
     app_log_level: str = "INFO"
+    # Per-feature log files under APP_DATA_DIR/logs/ — more verbose than the
+    # web UI activity feed. Set APP_LOG_TO_FILES=false to disable.
+    app_log_to_files: bool = True
+    app_log_file_level: str = "DEBUG"
+    # Minimum log level exposed in the web UI (activity + diagnostic logs).
+    app_web_ui_log_level: str = "INFO"
     app_port: int = 8900
     # Same idea as Sonarr/Radarr/Lidarr's "URL Base" setting: serve the
     # entire app (UI, API, static assets, docs) under this path prefix,
@@ -141,6 +147,10 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.app_data_dir / "app.db"
+
+    @property
+    def app_log_dir(self) -> Path:
+        return self.app_data_dir / "logs"
 
     # ── Convenience predicates ──────────────────────────────────────────────
     def qbit_uses_api_key(self) -> bool:

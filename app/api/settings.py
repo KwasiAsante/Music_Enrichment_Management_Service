@@ -109,8 +109,12 @@ FIELD_CATALOG: list[tuple[str, str, str, str, list[str] | None, str | None]] = [
      "Serve the whole app under a path prefix, e.g. /music-helper — the "
      "same idea as Sonarr/Radarr/Lidarr's URL Base. Leave blank to serve "
      "at the root."),
-    ("app_log_level", "Log Level", "General", "select",
+    ("app_log_level", "Console Log Level", "General", "select",
      ["DEBUG", "INFO", "WARNING", "ERROR"], None),
+    ("app_web_ui_log_level", "Web UI Log Level", "General", "select",
+     ["DEBUG", "INFO", "WARNING", "ERROR"],
+     "Minimum level shown on the Logs page. DEBUG includes verbose diagnostic "
+     "detail from feature log files; INFO shows summaries only."),
     ("tz", "Timezone", "General", "text", None,
      "IANA timezone name, e.g. America/Toronto — used for the schedule below."),
 

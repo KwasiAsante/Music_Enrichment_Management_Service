@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.config import settings
+from app.logging_config import log_job_progress, register_job_type
 
 log = logging.getLogger("music-lib-helper.db")
 
@@ -105,6 +106,7 @@ def create_job(job_type: str, progress_total: int = 0) -> str:
             "progress_total) VALUES (?, ?, 'pending', ?, ?, ?)",
             (job_id, job_type, now, now, progress_total),
         )
+    register_job_type(job_id, job_type)
     return job_id
 
 
@@ -148,6 +150,9 @@ def update_job(
     params.append(job_id)
     with _connect() as conn:
         conn.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE id = ?", params)
+
+    if append_log is not None:
+        log_job_progress(job_id, append_log)
 
 
 def get_job(job_id: str) -> Optional[dict]:

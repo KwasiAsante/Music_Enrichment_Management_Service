@@ -159,9 +159,9 @@ async function refreshStats() {
 }
 
 async function refreshActivity() {
-  const category = document.getElementById('activity-filter').value;
-  const params = new URLSearchParams({ limit: 15 });
-  if (category) params.set('category', category);
+  const feature = document.getElementById('activity-filter').value;
+  const params = new URLSearchParams({ limit: 15, source: 'all' });
+  if (feature) params.set('feature', feature);
 
   const res = await fetch(`/api/v1/logs/?${params}`);
   if (!res.ok) return;
@@ -171,7 +171,7 @@ async function refreshActivity() {
   if (rows.length === 0) {
     list.innerHTML =
       `<div class="empty"><div class="empty-icon">🗒</div>` +
-      `${category ? 'No activity in this category yet.' : 'No activity yet — runs will show up here once a scan or enrichment happens.'}</div>`;
+      `${feature ? 'No activity for this feature yet.' : 'No activity yet — runs will show up here once a scan or enrichment happens.'}</div>`;
     return;
   }
 
@@ -181,12 +181,13 @@ async function refreshActivity() {
 function renderActivityRow(item) {
   const badgeClass = item.level === 'error' ? 'badge-red' : item.level === 'warning' ? 'badge-yellow' : 'badge-green';
   const title = item.artist ? `${item.artist}${item.album ? ' — ' + item.album : ''}` : item.message;
+  const tag = item.feature || item.category;
   return `
     <div class="result-card">
       <div class="info">
         <div class="info-title">${escapeHtml(title)}</div>
         <div class="info-meta">
-          <span class="badge ${badgeClass}">${escapeHtml(item.category)}</span>
+          <span class="badge ${badgeClass}">${escapeHtml(tag)}</span>
           ${item.artist ? `<span>${escapeHtml(item.message)}</span>` : ''}
         </div>
       </div>

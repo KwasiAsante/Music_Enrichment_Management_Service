@@ -52,9 +52,9 @@
   <div class="section-label" style="justify-content:flex-start; gap:12px;">
     <span>Recent Activity</span>
     <select id="activity-filter" style="width:auto; background:var(--surface); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-family:'DM Mono',monospace; font-size:11px; padding:3px 8px;">
-      <option value="">All categories</option>
-      {% for c in categories %}
-      <option value="{{ c }}">{{ c }}</option>
+      <option value="">All features</option>
+      {% for f in features %}
+      <option value="{{ f }}">{{ f }}</option>
       {% endfor %}
     </select>
   </div>
@@ -71,7 +71,7 @@
             <span class="badge
               {%- if item.level == 'error' %} badge-red
               {%- elif item.level == 'warning' %} badge-yellow
-              {%- else %} badge-green{% endif %}">{{ item.category }}</span>
+              {%- else %} badge-green{% endif %}">{{ item.feature or item.category }}</span>
             {% if item.artist %}<span>{{ item.message }}</span>{% endif %}
           </div>
         </div>

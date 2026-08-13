@@ -123,8 +123,13 @@ async def _forward(
                 headers=headers,
             )
     except httpx.HTTPError as exc:
-        log.warning("proxy upstream error to %s: %s", target_url, exc)
+        log.warning("proxy upstream error %s %s: %s", request.method, target_url, exc)
         raise HTTPException(status_code=502, detail=f"upstream error: {exc}") from exc
+
+    log.info(
+        "proxy %s %s → %s (%s)",
+        request.method, request.url.path, target_url.split("?", 1)[0], upstream.status_code,
+    )
 
     response_headers = {
         k: v for k, v in upstream.headers.items()

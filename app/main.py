@@ -23,15 +23,13 @@ from app import __version__, scheduler
 from app.api import artist, backup, enrich, library, logs, mapping, mb, picard, proxy, settings as settings_api
 from app.config import settings
 from app.core.beets_config import sync_beets_vgmdb_url, validate_beet_bin
+from app.logging_config import setup_logging
 from app.storage import db
 from app.ui import router as ui
 
 
 # ── Logging ─────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=getattr(logging, settings.app_log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-)
+setup_logging()
 log = logging.getLogger("music-lib-helper")
 
 
@@ -41,6 +39,8 @@ async def lifespan(app: FastAPI):
 
     log.info("music-lib-helper v%s starting", __version__)
     log.info("data dir:  %s", settings.app_data_dir)
+    if settings.app_log_to_files:
+        log.info("log files: %s", settings.app_log_dir)
     log.info("music dir: %s", settings.app_music_dir)
     log.info("lidarr:    %s", settings.lidarr_url)
     log.info("vgmdb:     %s", settings.vgmdb_url)

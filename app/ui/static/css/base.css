@@ -477,7 +477,7 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .log { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.9; max-height: 260px; overflow-y: auto; }
 .log-line { display: flex; gap: 10px; }
 .lt { color: var(--muted); flex-shrink: 0; }
-.lok { color: var(--success); } .lerr { color: var(--danger); } .linfo { color: var(--accent); } .lwarn { color: var(--warn); }
+.lok { color: var(--success); } .lerr { color: var(--danger); } .linfo { color: var(--accent); } .lwarn { color: var(--warn); } .ldebug { color: var(--muted); }
 
 @media (max-width: 640px) {
   /* Log messages are unpredictable length (file paths, error text) and

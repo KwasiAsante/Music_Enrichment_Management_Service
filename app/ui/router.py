@@ -72,6 +72,7 @@ from app.api import library as library_api
 from app.api import logs as logs_api
 from app.api import settings as settings_api
 from app.config import settings
+from app.core.log_reader import KNOWN_FEATURES
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.storage import db
 from app.storage.json_store import store
@@ -131,11 +132,15 @@ def _library_stats() -> dict:
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     stats = _library_stats()
-    activity = db.list_activity(limit=15)
+    activity = logs_api.list_logs(limit=15, source="all")
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"stats": stats, "activity": activity, "categories": logs_api.KNOWN_CATEGORIES},
+        {
+            "stats": stats,
+            "activity": activity,
+            "features": KNOWN_FEATURES,
+        },
     )
 
 
@@ -230,11 +235,15 @@ def album_detail_page(request: Request, folder: str = Query(...)) -> HTMLRespons
 # ── GET /logs ────────────────────────────────────────────────────────────────
 @router.get("/logs", response_class=HTMLResponse)
 def logs_page(request: Request) -> HTMLResponse:
-    rows = logs_api.list_logs(limit=100, category=None, level=None, artist=None)
+    rows = logs_api.list_logs(limit=200, source="all")
     return templates.TemplateResponse(
         request,
         "logs.html",
-        {"rows": rows, "categories": logs_api.KNOWN_CATEGORIES},
+        {
+            "rows": rows,
+            "features": KNOWN_FEATURES,
+            "web_ui_log_level": settings.app_web_ui_log_level,
+        },
     )
 
 
