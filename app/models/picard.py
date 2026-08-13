@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 class ExportOneRequest(BaseModel):
     """Body for ``POST /picard/export``.
 
-    Picard's Post-Tagging Action expands the ``%directory%`` token to the
+    Picard's Post-Tagging Action expands the ``%folderpath%`` token to the
     folder it just wrote into. The wrapper forwards that as-is — could be
-    an absolute container path, a host path, or just the artist folder
-    name. PicardExporter resolves all three.
+    an absolute path (artist, album, or disc subfolder), a host path, or
+    just the artist folder name. PicardExporter resolves all of these.
     """
     artist_folder: str = Field(
         description="Path to (or basename of) the artist folder Picard "

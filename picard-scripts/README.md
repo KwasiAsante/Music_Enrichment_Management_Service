@@ -24,9 +24,9 @@ A tiny stdlib-only Python script Picard runs after every album save. It POSTs th
 
   Add this single command line:
 
-      python "/config/scripts/picard_trigger.py" --artist "%directory%"
+      python "/config/scripts/picard_trigger.py" --artist "%folderpath%"
 
-  The `%directory%` token expands to the folder Picard just wrote into (the album folder). The wrapper climbs one level to get the artist folder before forwarding.
+  Use `%folderpath%` (full path to the folder Picard just wrote into), **not** `%directory%` — that token is only the folder *name* (e.g. `CD 01`). For multi-disc albums the path may end in a disc subfolder; the helper walks up to the artist folder.
 
 ## What happens on each tag-save
 

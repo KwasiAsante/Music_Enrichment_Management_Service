@@ -61,10 +61,12 @@ class PicardExporter:
     ) -> dict[str, Any]:
         """Process one artist folder.
 
-        ``artist_folder`` is whatever Picard's ``%directory%`` token
-        expanded to — could be an absolute container path, a host path,
+        ``artist_folder`` is whatever Picard's ``%folderpath%`` token
+        expanded to — could be an absolute path to the artist folder,
+        a path to an album or disc subfolder beneath it, a host path,
         or just the artist folder name. We try the literal path first,
-        then fall back to ``artist_root / basename``.
+        walk up to a direct child of ``artist_root``, then fall back to
+        ``artist_root / basename``.
 
         Returns a result dict suitable for the API response. Writes the
         merged file and uploads to gist (if a token is configured) unless
@@ -166,13 +168,29 @@ class PicardExporter:
 
     # ── internal ────────────────────────────────────────────────────────
     def _resolve_artist_folder(self, given: str | Path) -> Path | None:
-        """Return the on-disk artist folder, trying the literal path first
-        then falling back to ``artist_root / basename``."""
+        """Return the on-disk artist folder.
+
+        Resolution order:
+        1. ``given`` itself, if it is an existing artist folder.
+        2. Walk up from ``given`` (file or folder) until a direct child of
+           ``artist_root`` is found — handles multi-disc layouts such as
+           ``Artist/Album/CD 01/``.
+        3. ``artist_root / basename(given)`` for bare-name inputs.
+        """
         p = Path(str(given))
+
+        if p.is_absolute() and p.exists():
+            current = p if p.is_dir() else p.parent
+            while True:
+                if current.is_dir() and current.parent == self.artist_root:
+                    return current
+                if current == current.parent:
+                    break
+                current = current.parent
+
         if p.is_absolute() and p.exists() and p.is_dir():
             return p
-        # Fall back to basename lookup (handles host-path / Windows-path /
-        # bare-name inputs uniformly).
+
         candidate = self.artist_root / p.name
         if candidate.exists() and candidate.is_dir():
             return candidate

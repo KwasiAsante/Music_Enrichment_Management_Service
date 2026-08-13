@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """Picard Post-Tagging Action wrapper.
 
-Picard invokes this after every album tag-save with the artist folder
-as ``%directory%``. The wrapper forwards that to the helper service's
-``/api/v1/picard/export`` endpoint, which extracts the MB album-artist
-id from the audio tags, upserts ``artists_mbids.json``, and optionally
-syncs it to a private GitHub Gist.
+Picard invokes this after every album tag-save with the folder Picard
+just wrote into as ``%folderpath%``. The wrapper forwards that to the
+helper service's ``/api/v1/picard/export`` endpoint, which extracts the
+MB album-artist id from the audio tags, upserts ``artists_mbids.json``,
+and optionally syncs it to a private GitHub Gist.
 
 Wiring in Picard:
     Options → Plugins (or Options → File naming/Scripts → Post-Tagging
     Actions, depending on version):
 
-        python "/config/scripts/picard_trigger.py" --artist "%directory%"
+        python "/config/scripts/picard_trigger.py" --artist "%folderpath%"
 
-    The `%directory%` token is the folder Picard just wrote into. Its
-    *parent* is what we want (the artist folder); the wrapper handles
-    that resolution.
+    Use ``%folderpath%`` (the full path to the folder), **not**
+    ``%directory%`` — that token is only the folder *name* (e.g.
+    ``CD 01``), which the helper cannot resolve. For multi-disc albums
+    the path may point at a disc subfolder; the helper walks up to the
+    artist folder.
 
 Environment:
     MUSIC_LIB_HELPER_URL   default: http://192.168.2.130:8900
@@ -67,18 +69,33 @@ def _parse_artist(argv: list[str]) -> str:
     return extras[0].strip() if extras else ""
 
 
+def _looks_like_bare_folder_name(raw: str) -> bool:
+    """True when ``raw`` is a single path component (no directory separators).
+
+    Picard's ``%directory%`` expands to just the folder name — e.g.
+    ``CD 01`` — which the helper cannot locate on disk.
+    """
+    if not raw or raw in {".", ".."}:
+        return False
+    normalized = raw.replace("\\", "/")
+    return "/" not in normalized and not Path(raw).is_absolute()
+
+
 def main() -> int:
     raw = _parse_artist(sys.argv)
     if not raw:
         _log("no --artist value provided — nothing to do")
         return 0
 
-    # Picard's %directory% is the album folder; the helper expects the
-    # artist folder. The exporter is forgiving (it tries both the
-    # literal path and falls back to its basename), but climbing one
-    # level here makes intent obvious in the logs.
-    p = Path(raw)
-    artist_folder = str(p.parent) if p.parent.name and p.exists() else raw
+    if _looks_like_bare_folder_name(raw):
+        _log(
+            f"WARNING: {raw!r} looks like a folder name, not a path — "
+            "use %folderpath% in Picard, not %directory%"
+        )
+
+    # Forward Picard's %folderpath% as-is. The helper walks up from disc
+    # or album subfolders to the artist folder under synced_music/Artist/.
+    artist_folder = raw
 
     payload = {"artist_folder": artist_folder}
     _log(f"POST {ENDPOINT}  artist_folder={artist_folder!r}")
