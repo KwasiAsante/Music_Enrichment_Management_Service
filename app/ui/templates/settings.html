@@ -78,6 +78,7 @@
                    placeholder="{{ '•••••••• (configured — leave blank to keep it)' if field.is_set else 'not set' }}"
                    autocomplete="new-password">
             {% endif %}
+          {% elif field.field_type == "text" %}
             <input type="text" id="field-{{ field.key }}" data-key="{{ field.key }}" data-type="text" value="{{ field.value or '' }}">
           {% endif %}
         </div>
