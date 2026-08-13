@@ -34,7 +34,7 @@ VGMplug:
   lang-priority: en,ja-latn,ja
   data_source_mismatch_penalty: 0.0
   autosearch: no
-  baseurl: http://192.168.2.172:8008
+  baseurl: http://192.168.2.130:8008
   artist-priority: composers,performers,arrangers
 
 # ── Import settings ───────────────────────────────────────────────────────────

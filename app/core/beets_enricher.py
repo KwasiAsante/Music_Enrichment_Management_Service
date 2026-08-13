@@ -38,6 +38,7 @@ Design notes:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import unicodedata
@@ -575,10 +576,26 @@ class BeetsEnricher:
         )
 
     # ── private: subprocess wrappers ────────────────────────────────────
+    def _beet_env(self) -> dict[str, str]:
+        """Environment for ``beet`` subprocesses.
+
+        Beets reads ``BEETSDIR`` from the OS environment, not from this
+        app's pydantic settings — and docker-compose ``env_file`` entries
+        can accidentally override the Dockerfile default with a host path
+        that doesn't exist inside the container. Always pass the configured
+        ``settings.beetsdir`` explicitly.
+        """
+        env = os.environ.copy()
+        env["BEETSDIR"] = str(settings.beetsdir)
+        return env
+
     def _beet_remove(self, album_folder: Path) -> bool:
         cmd = [settings.beet_bin, "remove", "-a", "-f", f"path:{album_folder}"]
         try:
-            r = _subprocess_run(cmd, capture_output=True, text=True, timeout=30)
+            r = _subprocess_run(
+                cmd, capture_output=True, text=True, timeout=30,
+                env=self._beet_env(),
+            )
             return r.returncode == 0
         except Exception as exc:  # noqa: BLE001
             log.debug("beet remove failed (non-fatal): %s", exc)
@@ -594,11 +611,17 @@ class BeetsEnricher:
             str(album_folder),
         ]
         try:
-            r = _subprocess_run(cmd, input="a\n", capture_output=True,
-                                text=True, timeout=300)
+            r = _subprocess_run(
+                cmd, input="a\n", capture_output=True, text=True,
+                timeout=300, env=self._beet_env(),
+            )
             return r.returncode == 0, (r.stdout + r.stderr).strip()
         except subprocess.TimeoutExpired:
             return False, "timeout"
+        except FileNotFoundError as exc:
+            return False, (
+                f"beet binary not found at {settings.beet_bin!r}: {exc}"
+            )
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
 
@@ -687,12 +710,20 @@ class BeetsEnricher:
     def _classify_failure(output: str) -> str:
         """Best-guess reason from beet's stderr / stdout when returncode != 0."""
         lower = output.lower()
+        if "beet binary not found" in lower or "no such file or directory" in lower:
+            return (
+                f"beet binary not found at {settings.beet_bin!r} "
+                "— check BEET_BIN in .env (use /usr/local/bin/beet in Docker)"
+            )
         if "timeout" in lower:
             return "beet import timed out"
         if "no candidates" in lower:
             return "no VGMDB candidates found"
-        if "network" in lower or "connection" in lower:
-            return "network error during beet import"
+        if (
+            "network" in lower or "connection" in lower
+            or "network problem" in lower or "http error" in lower
+        ):
+            return "network error during beet import (is the VGMDB API running?)"
         if "skipping" in lower:
             return "beet skipped (no match above threshold)"
         return "beet import failed or found no suitable match"
