@@ -665,9 +665,25 @@ class BeetsEnricher:
     ) -> int:
         """If beet/VGMplug wrote kanji into ``albumartist``/etc, replace
         with ``english_name``. Returns the number of files modified.
+
+        ``english_name`` normally comes from ``album_list.json``, but that
+        value is itself sourced from the *existing* embedded tag (see
+        ``LibraryScanner``) — so if a prior import already stamped a
+        non-Latin credit into the files, ``english_name`` can be non-Latin
+        too, making this a silent no-op. The artist folder on disk is the
+        one piece of naming that's guaranteed Latin, so fall back to it.
         """
-        if not english_name:
-            return 0
+        if not english_name or _has_non_latin(english_name):
+            fallback = album_folder.parent.name
+            if fallback and not _has_non_latin(fallback):
+                english_name = fallback
+            else:
+                log.warning(
+                    "cannot fix non-Latin artist tags for %s: no Latin name "
+                    "available (artist=%r, folder=%r)",
+                    album_folder, english_name, fallback,
+                )
+                return 0
         fixed = 0
         for audio_path in album_folder.rglob("*"):
             if audio_path.suffix.lower() not in AUDIO_EXTENSIONS:
