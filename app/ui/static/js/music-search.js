@@ -25,6 +25,17 @@ const lidarrKey    = () => 'server-managed';
 const prowlarrBase = () => '/proxy/prowlarr';
 const prowlarrKey  = () => 'server-managed';
 
+// MusicBrainz's canonical "Various Artists" artist — every compilation in
+// Lidarr shares this one artist record. Its discography is effectively
+// unbounded, so a RefreshArtist call against it doesn't reliably get back
+// every album we've already added; Lidarr treats whatever's missing from
+// that response as removed and deletes it. Concretely: adding release B
+// under Various Artists has been observed to silently delete release A
+// (added moments earlier) when the metadata refresh drops it. We skip the
+// refresh for this one artist and go straight to the direct-add fallback,
+// which doesn't touch the rest of the artist's already-tracked albums.
+const VARIOUS_ARTISTS_MBID = '89ad4ac3-39f7-470e-963a-56509c546377';
+
 function ts() { return new Date().toLocaleTimeString('en', {hour12:false}); }
 
 function log(logId, msg, type='info') {
@@ -262,21 +273,28 @@ async function addToLidarr() {
       || albums.find(a => a.title.toLowerCase() === selectedRg.title.toLowerCase());
 
     if (!album) {
-      // Force refresh artist metadata and retry once
-      log(logId, `Album not found — forcing metadata refresh…`);
-      await fetch(`${base}/api/v1/command?apikey=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'RefreshArtist', artistId: artist.id })
-      });
+      if (selectedArtistInfo.mbid === VARIOUS_ARTISTS_MBID) {
+        // See VARIOUS_ARTISTS_MBID above — refreshing this artist risks
+        // deleting other already-tracked VA releases, so skip straight to
+        // the direct-add fallback below instead of refreshing first.
+        log(logId, `Various Artists — skipping metadata refresh (would risk other VA releases), adding directly…`);
+      } else {
+        // Force refresh artist metadata and retry once
+        log(logId, `Album not found — forcing metadata refresh…`);
+        await fetch(`${base}/api/v1/command?apikey=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'RefreshArtist', artistId: artist.id })
+        });
 
-      // Wait for refresh to complete
-      await new Promise(r => setTimeout(r, 5000));
+        // Wait for refresh to complete
+        await new Promise(r => setTimeout(r, 5000));
 
-      // Retry album lookup
-      const albums2 = await fetch(`${base}/api/v1/album?artistId=${artist.id}&apikey=${key}`).then(r => r.json());
-      album = albums2.find(a => a.foreignAlbumId === selectedRg.id)
-        || albums2.find(a => a.title.toLowerCase() === selectedRg.title.toLowerCase());
+        // Retry album lookup
+        const albums2 = await fetch(`${base}/api/v1/album?artistId=${artist.id}&apikey=${key}`).then(r => r.json());
+        album = albums2.find(a => a.foreignAlbumId === selectedRg.id)
+          || albums2.find(a => a.title.toLowerCase() === selectedRg.title.toLowerCase());
+      }
 
       if (!album) {
         // Last resort: add album directly via MB release group ID
