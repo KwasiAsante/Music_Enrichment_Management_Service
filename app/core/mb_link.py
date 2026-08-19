@@ -54,12 +54,22 @@ class MBLinkChecker:
 
         * If MB already has any URL relation pointing to ``vgmdb.net`` /
           ``vgmdb.info``, returns ``has_link=True`` and that URL.
-        * Otherwise, if ``vgmdb_id`` is supplied, also builds a seed URL
-          pre-filling the VGMDB album URL for the user to one-click-submit.
+        * Otherwise, if ``vgmdb_id`` is supplied *and* the release's MB
+          status is ``Official``, also builds a seed URL pre-filling the
+          VGMDB album URL for the user to one-click-submit. MB editing
+          guidelines reserve external database relationships for the
+          release they actually describe, and VGMDB itself only catalogues
+          official commercial releases — so a Promotion / Bootleg /
+          Pseudo-Release / Withdrawn / Cancelled release (or one whose
+          status can't be determined) never gets a seed URL.
         * If ``vgmdb_id`` is not supplied and MB has no link, returns
           ``has_link=False`` with everything else None.
         """
-        existing = self._existing_vgmdb_url(mb_release_id)
+        if not mb_release_id or mb_release_id.startswith("vgmdb-"):
+            return LinkCheckResult(False, None, None, None)
+
+        data = self.mb.get_release(mb_release_id, includes="url-rels") or {}
+        existing = self._existing_vgmdb_url(data)
         if existing is not None:
             return LinkCheckResult(
                 has_link=True,
@@ -69,6 +79,15 @@ class MBLinkChecker:
             )
 
         if not vgmdb_id:
+            return LinkCheckResult(False, None, None, None)
+
+        status = (data.get("status") or "").strip().lower()
+        if status != "official":
+            log.info(
+                "Not offering a VGMDB seed URL for MB release %s: "
+                "status is %r, not Official",
+                mb_release_id, data.get("status"),
+            )
             return LinkCheckResult(False, None, None, None)
 
         vgmdb_url = f"https://vgmdb.net/album/{vgmdb_id}"
@@ -81,16 +100,9 @@ class MBLinkChecker:
         )
 
     # ── internal ────────────────────────────────────────────────────────
-    def _existing_vgmdb_url(self, mb_release_id: str) -> str | None:
-        """Return the first vgmdb.net / vgmdb.info URL on the release, or None.
-
-        Returns None for any error or for empty/synthetic ``vgmdb-*`` ids.
-        """
-        if not mb_release_id or mb_release_id.startswith("vgmdb-"):
-            return None
-        data = self.mb.get_release(mb_release_id, includes="url-rels")
-        if not data:
-            return None
+    @staticmethod
+    def _existing_vgmdb_url(data: dict) -> str | None:
+        """Return the first vgmdb.net / vgmdb.info URL relation, or None."""
         for rel in data.get("relations", []) or []:
             resource = ((rel.get("url") or {}).get("resource") or "")
             if "vgmdb.net" in resource or "vgmdb.info" in resource:

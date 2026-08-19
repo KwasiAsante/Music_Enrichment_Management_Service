@@ -805,7 +805,8 @@ class BeetsEnricher:
     ) -> Category | None:
         """If MB has no VGMDB link, post a seed URL to Discord. Returns
         the notifier category that was actually used, or None if MB is
-        already linked / mb_release_id is empty.
+        already linked, mb_release_id is empty, or the release isn't
+        eligible for a seed URL (e.g. its MB status isn't Official).
 
         ``category`` is the Discord webhook bucket: ``"mb_seed_dl"`` for
         the OnAlbumDownload hook (single-album enrichments triggered by
@@ -819,7 +820,7 @@ class BeetsEnricher:
         except Exception as exc:  # noqa: BLE001
             log.warning("MB link check failed: %s", exc)
             return None
-        if check.has_link:
+        if check.has_link or not check.seed_url:
             return None
         title = "🔗 Submit VGMDB Link to MusicBrainz"
         body = (

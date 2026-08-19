@@ -27,8 +27,8 @@ class VGMDBLinkResult(BaseModel):
     seed_url:      str | None = Field(
         default=None,
         description="MusicBrainz release-editor URL that pre-fills the "
-        "VGMDB link. None if MB already has the link or if no vgmdb_id "
-        "was supplied.",
+        "VGMDB link. None if MB already has the link, no vgmdb_id was "
+        "supplied, or the release's MB status isn't Official.",
     )
 
 

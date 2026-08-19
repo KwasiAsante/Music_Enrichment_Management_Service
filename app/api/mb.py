@@ -3,9 +3,13 @@
 Two read-only lookups:
 
 * ``GET /vgmdb-link/{mb_release_id}`` — does this MB release already
-  carry a VGMDB URL relationship? If not and a ``vgmdb_id`` query is
-  supplied, also returns a MB release-editor seed URL that pre-fills the
-  VGMDB link so the user can one-click-submit it.
+  carry a VGMDB URL relationship? If not, a ``vgmdb_id`` query is
+  supplied, and the release's MB status is ``Official``, also returns a
+  MB release-editor seed URL that pre-fills the VGMDB link so the user
+  can one-click-submit it. Non-Official releases (Promotion, Bootleg,
+  Pseudo-Release, Withdrawn, Cancelled, or unknown status) never get a
+  seed URL, per MB editing guidelines and VGMDB's own official-release
+  scope.
 
 * ``GET /artist-alias/{mb_artist_id}`` — resolve a MusicBrainz artist's
   preferred English name using the same primary→any-English→romanised
@@ -33,9 +37,9 @@ def vgmdb_link(
     mb_release_id: str = Path(..., description="MusicBrainz release id."),
     vgmdb_id: str | None = Query(
         default=None,
-        description="Optional. If provided and MB doesn't already have a "
-        "link, the response includes a release-editor seed URL pre-filling "
-        "the VGMDB link.",
+        description="Optional. If provided, MB doesn't already have a "
+        "link, and the release's MB status is Official, the response "
+        "includes a release-editor seed URL pre-filling the VGMDB link.",
     ),
 ) -> VGMDBLinkResult:
     result = MBLinkChecker().check(mb_release_id, vgmdb_id=vgmdb_id)
