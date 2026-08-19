@@ -49,3 +49,24 @@ These complement the helper service's own activity log at `GET /api/v1/enrich/lo
 ## Updating
 
 When you bump the helper image, the wrapper scripts in `lidarr-scripts/` rarely need to change — the only thing they have to agree on with the service is the request/response shape, and that's versioned via the `/api/v1/` URL prefix. If the shape ever does change in a breaking way, the helper will accept the old shape for at least one release with a deprecation warning in the activity log.
+
+## Artist Name Translator (browser userscript)
+
+`Lidarr-Artist-Name-Translator.user.js` is a Tampermonkey/Violentmonkey userscript — it runs in your browser, not in the container, and doesn't talk to the helper service at all (it calls Lidarr's own `/api/v1/artist` directly).
+
+On any Lidarr page it:
+
+- Injects a floating, always-on-top search bar (`Ctrl+Shift+F` to focus) that fuzzy-matches across both the MusicBrainz artist name and the on-disk folder name, and jumps straight to the artist page on Enter/click. Persists across Lidarr's SPA navigation.
+- On the artist library grid, adds a small English/romaji label under any artist whose MusicBrainz name is non-Latin (Japanese/Korean/Chinese) or a Nordic variant, using whatever the on-disk folder name already is — the same folder name this service's Beets enrichment renames to when it rewrites non-Latin artist tags.
+- Caches the artist list in `localStorage` for 24h (invalidated automatically if the artist count changes); the ↻ button next to the search bar forces a refresh.
+
+### Installation
+
+1. Install the [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey) browser extension.
+2. Open the raw file on GitHub — `https://raw.githubusercontent.com/KwasiAsante/Music_Enrichment_Management_Service/main/lidarr-scripts/Lidarr-Artist-Name-Translator.user.js` — Tampermonkey should offer to install it directly. (Or open the file in Tampermonkey's editor and paste the contents into a new script.)
+3. Edit the `@match` lines at the top to point at *your* Lidarr URL(s) — the script ships with the author's own LAN IP and domain hardcoded, and only runs on pages that match.
+4. Because `@updateURL`/`@downloadURL` point at this repo, Tampermonkey will offer updates automatically whenever the script changes here (Tampermonkey Dashboard → the script → "Check for userscript updates", or just wait for its periodic check).
+
+### Editing
+
+Since it's hosted here, changes just need a commit — Tampermonkey picks up the new `@version` on its next update check. Bump `@version` in the header when you push a change so installs actually pick it up.

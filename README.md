@@ -7,7 +7,7 @@ What it does:
 - Scans the music library and tracks which albums have MusicBrainz IDs.
 - Resolves albums against VGMDB (MB URL → catalog → barcode → title) and lets you record/curate the mapping.
 - Runs `beet import` with a custom VGMDB beets plugin to tag albums, including rewriting non-Latin artist tags to their English alias.
-- Fixes Lidarr artist folder paths that come in kanji/native script.
+- Fixes Lidarr artist folder paths that come in kanji/native script, with a companion browser userscript that shows the English/romaji name inline in Lidarr's UI.
 - Exports MusicBrainz artist IDs for Picard's Post-Tagging Action, optionally syncing to a GitHub Gist.
 - Sends Discord notifications and runs the above on a weekly schedule.
 - Ships a web UI (dashboard, VGMDB mapping queue, enrichment runs, library browser, activity log, and a MusicBrainz → Lidarr → Prowlarr → qBittorrent search/download tool) — see [Web UI](#web-ui) below.
@@ -19,7 +19,8 @@ What it does:
 - `[docs/PHASE-1-COMPLETE.md](docs/PHASE-1-COMPLETE.md)` — status
 snapshot of the core API (Phase 1).
 - `[lidarr-scripts/README.md](lidarr-scripts/README.md)` — installing
-the Lidarr custom-script wrappers.
+the Lidarr custom-script wrappers and the Artist Name Translator
+browser userscript.
 - `[picard-scripts/README.md](picard-scripts/README.md)` — installing
 the Picard Post-Tagging Action wrapper.
 - In-app: once it's running, the **Help** page (`/help`) has a full workflow guide and per-page reference — the docs above are for the code, that page is for using the site day to day.
