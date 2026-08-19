@@ -29,6 +29,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
 from app.core.beets_enricher import BeetsEnricher
+from app.core.library_scanner import LibraryScanner
 from app.models.enrich import (
     EnrichAlbumRequest,
     EnrichAlbumResult,
@@ -107,6 +108,14 @@ def enrich_album(
             level="error", artist=req.artist_name, album=req.album_title,
         )
         raise HTTPException(500, f"enrich failed: {exc}") from exc
+
+    if not dry_run:
+        # Keep album_list.json current without waiting on the next cron
+        # scan — mirrors BeetsEnricher.run_bulk()'s post-enrich scan.
+        try:
+            LibraryScanner().scan(dry_run=False, cleanup=False)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("post-enrich library scan failed: %s", exc)
 
     db.update_job(job_id, status="success" if result["ok"] else "failed",
                   result=result)

@@ -82,6 +82,59 @@ def test_get_job_status_404_for_unknown(client: TestClient, auth):
     assert r.status_code == 404
 
 
+# ── post-enrich library scan (issue #5) ─────────────────────────────────────
+def test_successful_enrich_triggers_library_scan(client: TestClient, auth, monkeypatch):
+    from app.core.beets_enricher import BeetsEnricher
+    from app.core.library_scanner import LibraryScanner
+
+    monkeypatch.setattr(
+        BeetsEnricher, "enrich_album",
+        lambda self, info, **kw: {
+            "ok": True, "source": "test", "artist": info["artist"],
+            "album": info["album"], "mb_release_id": info["mb_release_id"],
+            "message": "ok",
+        },
+    )
+    scan_calls: list[bool] = []
+    monkeypatch.setattr(
+        LibraryScanner, "scan",
+        lambda self, **kw: scan_calls.append(True) or {},
+    )
+
+    r = client.post("/api/v1/enrich/album", json={
+        "event_type": "AlbumDownload", "artist_name": "X", "album_title": "Y",
+        "mb_release_id": "abc-123", "track_paths": ["/music/X/Y/01.flac"],
+    }, auth=auth)
+    assert r.status_code == 200
+    assert scan_calls == [True]
+
+
+def test_dry_run_enrich_does_not_trigger_library_scan(client: TestClient, auth, monkeypatch):
+    from app.core.beets_enricher import BeetsEnricher
+    from app.core.library_scanner import LibraryScanner
+
+    monkeypatch.setattr(
+        BeetsEnricher, "enrich_album",
+        lambda self, info, **kw: {
+            "ok": True, "source": "test", "artist": info["artist"],
+            "album": info["album"], "mb_release_id": info["mb_release_id"],
+            "message": "ok",
+        },
+    )
+    scan_calls: list[bool] = []
+    monkeypatch.setattr(
+        LibraryScanner, "scan",
+        lambda self, **kw: scan_calls.append(True) or {},
+    )
+
+    r = client.post("/api/v1/enrich/album?dry_run=true", json={
+        "event_type": "AlbumDownload", "artist_name": "X", "album_title": "Y",
+        "mb_release_id": "abc-123", "track_paths": ["/music/X/Y/01.flac"],
+    }, auth=auth)
+    assert r.status_code == 200
+    assert scan_calls == []
+
+
 def test_enrich_log_returns_recent_entries(client: TestClient, auth, isolated_env):
     from app.storage import db
     db.add_activity("enrich", "test enrichment happened", artist="X", album="Y")
