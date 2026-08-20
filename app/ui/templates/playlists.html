@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Playlists — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Playlist Converter</div>
+    <h1>Playlists</h1>
+    <p class="page-sub">Remap an old <code>.m3u</code>/<code>.m3u8</code> playlist to the current library layout.</p>
+  </div>
+</div>
+
+{% set tip_key = "playlists" %}
+{% set tip_text = "Nothing is written on the server — upload a playlist, fix any unmatched tracks by hand below, then download the fixed copy." %}
+{% set tip_href = url_base ~ "/help#playlists" %}
+{% include "_tip_banner.html" %}
+
+<section class="backup-panel">
+  <div class="section-label">Convert</div>
+  <form id="convert-form" class="import-form">
+    <input type="file" id="playlist-file" accept=".m3u,.m3u8,audio/x-mpegurl" required>
+    <button class="btn btn-primary btn-sm" type="submit" id="convert-btn">Convert</button>
+    <button class="btn btn-ghost btn-sm" type="button" id="download-btn" style="display:none;">⇩ Download converted playlist</button>
+  </form>
+  <div id="convert-result" class="import-result"></div>
+</section>
+
+<section id="entries-section" style="display:none;">
+  <div class="section-label">Entries (<span id="entries-count">0</span>)</div>
+  <p class="panel-hint">Click <strong>Fix</strong> on any entry to search for the right album and pick the track by hand — useful for anything left unmatched, or a match you don't trust.</p>
+  <div class="results" id="entries-results"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/playlists.js') }}" defer></script>
+{% endblock %}

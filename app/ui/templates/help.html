@@ -16,6 +16,7 @@
   <a href="#mappings">Mappings</a>
   <a href="#enrich">Enrich</a>
   <a href="#library">Library</a>
+  <a href="#playlists">Playlists</a>
   <a href="#logs">Logs</a>
   <a href="#music-search">Music Search</a>
   <a href="#faq">FAQ &amp; Troubleshooting</a>
@@ -166,6 +167,16 @@
     <li><strong>Group by artist</strong> buckets results under artist headers instead of a flat list. Click a header to collapse/expand it, or use <strong>Collapse all</strong> / <strong>Expand all</strong> in the toolbar. Not paginated — it fetches everything matching your filters, capped at 2000 albums (you'll see a note if a filter set is broader than that).</li>
     <li><strong>List / Grid layout</strong> — grid mode shows a square cover-art thumbnail per album, pulled from a cover image file in the album folder (<code>cover.jpg</code>, <code>folder.png</code>, etc.) or whatever's embedded in the first audio file. An album with neither just shows a plain placeholder — that's expected, not an error.</li>
     <li>The <strong>Skipped</strong> view here is <em>not</em> the same thing as Mappings' Skipped Albums panel — see the FAQ below for the distinction, it trips people up.</li>
+  </ul>
+</section>
+
+<section class="help-section" id="playlists">
+  <h2><span class="icon">♫</span> Playlists</h2>
+  <p class="help-intro">Fix a <code>.m3u</code>/<code>.m3u8</code> playlist exported before a re-tagging/re-organizing run — every entry gets remapped to wherever that track lives now.</p>
+  <ul class="help-list">
+    <li>Upload the old playlist file; nothing is written on the server — the converted file is generated in the response and downloaded straight to your browser.</li>
+    <li>Each entry is resolved by a chain of strategies, most confident first: <strong>Unchanged</strong> (path still valid), <strong>Renumbered</strong> (same album folder, only the track filename changed — the common case after a beets retag), <strong>Relocated</strong> (folder renamed, filename matched uniquely elsewhere in the library), <strong>Fuzzy</strong> (closest filename/folder match when nothing lines up exactly), or <strong>Unmatched</strong>.</li>
+    <li>Unmatched entries never fail the conversion — they're left out of the downloaded playlist as a <code>&#35; UNMATCHED: &lt;original path&gt;</code> comment and listed in the results below so you can fix them by hand.</li>
   </ul>
 </section>
 

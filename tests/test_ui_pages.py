@@ -18,6 +18,7 @@ ALL_PAGES = [
     "/enrich",
     "/library",
     "/library?view=skipped",
+    "/playlists",
     "/logs",
     "/help",
     "/settings",
@@ -48,7 +49,7 @@ def test_nav_order_matches_workflow(client: TestClient, auth):
     )
     assert labels == [
         "Dashboard", "Music Search", "Mappings", "Enrich",
-        "Library", "Logs", "Help", "Settings",
+        "Library", "Playlists", "Logs", "Help", "Settings",
     ]
 
 
@@ -58,6 +59,7 @@ def test_nav_order_matches_workflow(client: TestClient, auth):
     ("/mappings", "Mappings"),
     ("/enrich", "Enrich"),
     ("/library", "Library"),
+    ("/playlists", "Playlists"),
     ("/logs", "Logs"),
     ("/help", "Help"),
     ("/settings", "Settings"),

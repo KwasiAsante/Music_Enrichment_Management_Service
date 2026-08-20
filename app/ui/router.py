@@ -45,6 +45,13 @@ these are top-level paths so they read naturally in a browser
                         context (``qbit_save_path``) is passed in — the
                         page no longer carries any API keys or passwords;
                         see ``app.api.proxy`` for where those moved.
+* ``GET /playlists`` — Static form page, no server-rendered data. Upload
+                        + convert + download all wired live via
+                        ``static/js/playlists.js`` against
+                        ``POST /api/v1/playlist/convert`` — that endpoint
+                        is stateless (no persisted playlist directory
+                        exists in this app), so there's nothing here to
+                        server-render.
 * ``GET /help``      — Static documentation page, no data. Per-page
                         dismissible tip banners (``templates/_tip_banner.html``,
                         ``static/js/tips.js``) link into this page's anchors.
@@ -255,6 +262,15 @@ def music_search_page(request: Request) -> HTMLResponse:
         "music_search.html",
         {"qbit_save_path": settings.qbit_save_path},
     )
+
+
+# ── GET /playlists ───────────────────────────────────────────────────────────
+@router.get("/playlists", response_class=HTMLResponse)
+def playlists_page(request: Request) -> HTMLResponse:
+    """Static form — upload/convert/download all happen client-side
+    against ``POST /api/v1/playlist/convert``. See that endpoint's
+    docstring for the matching strategy."""
+    return templates.TemplateResponse(request, "playlists.html", {})
 
 
 # ── GET /help ────────────────────────────────────────────────────────────────
