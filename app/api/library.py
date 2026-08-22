@@ -111,6 +111,12 @@ def _filtered_entries(
     ``/albums/grouped`` — one place for the filtering policy so the two
     views can never quietly drift apart.
 
+    ``folder`` is matched against the album name (whatever script it's
+    tagged in — a translated or non-Latin title matches just as well as
+    an English one) *or* the folder path, so it doubles as an album
+    search despite the name kept for backwards compatibility with
+    existing callers/links.
+
     ``q``, unlike ``artist``/``folder``, is OR'd across artist, album,
     and folder — a single free-text box that finds an album whichever
     of those three the person happens to remember. Combines (AND) with
@@ -135,7 +141,10 @@ def _filtered_entries(
 
         if artist_q and artist_q not in info.get("artist", "").lower():
             continue
-        if folder_q and folder_q not in folder_path.lower():
+        if folder_q and not (
+            folder_q in info.get("album", "").lower()
+            or folder_q in folder_path.lower()
+        ):
             continue
         if free_q and not (
             free_q in info.get("artist", "").lower()
@@ -224,7 +233,8 @@ def list_albums(
     ),
     folder: str | None = Query(
         default=None,
-        description="Case-insensitive substring match on the album's folder path.",
+        description="Case-insensitive substring match on the album name "
+        "(any script) or the album's folder path.",
     ),
     unmapped: bool = Query(
         default=False,
@@ -278,7 +288,8 @@ def list_albums_grouped(
     ),
     folder: str | None = Query(
         default=None,
-        description="Case-insensitive substring match on the album's folder path.",
+        description="Case-insensitive substring match on the album name "
+        "(any script) or the album's folder path.",
     ),
     unmapped: bool = Query(default=False),
     enriched: bool = Query(default=False),

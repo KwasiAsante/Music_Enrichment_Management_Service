@@ -16,10 +16,11 @@ Two endpoints:
 * ``GET /album-tracks`` — the manual-match flow for an entry the
   automatic pass left unmatched (or a person just wants to double-check/
   override). A person searches for the right album via the existing
-  ``GET /library/albums?folder=`` (no new search endpoint needed — that
-  one already does substring search over artist+album), then this lists
-  that album's actual audio files plus a best-effort suggestion, so
-  picking the right one is usually one click, not a manual browse.
+  ``GET /library/albums?q=`` (no new search endpoint needed — that one
+  already does free-text substring search across artist, album, and
+  folder), then this lists that album's actual audio files plus a
+  best-effort suggestion, so picking the right one is usually one click,
+  not a manual browse.
 """
 
 from __future__ import annotations

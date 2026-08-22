@@ -37,11 +37,20 @@ def test_source_filter_auto_matches_search_prefixed(client: TestClient, auth, is
     assert data["total"] == 1 and data["albums"][0]["mb_release_id"] == "mb-2"
 
 
-def test_folder_filter(client: TestClient, auth, isolated_env):
+def test_folder_filter_matches_folder_path(client: TestClient, auth, isolated_env):
     from app.storage.json_store import store
     _seed_albums(store)
     r = client.get("/api/v1/library/albums", params={"folder": "Artist B"}, auth=auth)
     assert r.json()["total"] == 1
+
+
+def test_folder_filter_matches_album_name(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+    _seed_albums(store)
+    r = client.get("/api/v1/library/albums", params={"folder": "Album 2"}, auth=auth)
+    data = r.json()
+    assert data["total"] == 1
+    assert data["albums"][0]["mb_release_id"] == "mb-2"
 
 
 def test_unmapped_filter_has_no_mapping_source(client: TestClient, auth, isolated_env):

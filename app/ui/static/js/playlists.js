@@ -6,8 +6,10 @@
  * the response body — there's no server path to link to.
  *
  * Manual matching: any row's "Fix" button opens an inline panel to search
- * for an album (GET /library/albums?folder=, reused as-is — it's already
- * a substring search over artist+album) and pick the track by hand
+ * for an album (GET /library/albums?q=, reused as-is — it's already a
+ * free-text substring search OR'd across artist, album, and folder, so it
+ * matches a translated/non-Latin album title as readily as a folder name)
+ * and pick the track by hand
  * (GET /playlist/album-tracks, which also returns a best-effort
  * suggested_path once an album's picked). Picking a track updates
  * lastResult.entries in place; the downloadable playlist text is always
@@ -167,7 +169,7 @@ async function searchAlbums(index, query) {
 
   resultsEl.innerHTML = `<div class="match-hint">Searching…</div>`;
   try {
-    const res = await fetch(`/api/v1/library/albums?folder=${encodeURIComponent(query)}&limit=15`);
+    const res = await fetch(`/api/v1/library/albums?q=${encodeURIComponent(query)}&limit=15`);
     if (!res.ok) throw new Error(`album search failed (HTTP ${res.status})`);
     const data = await res.json();
 

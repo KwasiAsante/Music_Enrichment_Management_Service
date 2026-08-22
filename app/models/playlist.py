@@ -9,7 +9,7 @@
   is what a manually-picked ``resolved_path`` gets joined onto client-side.
 * ``AlbumTracksResult`` — response for ``GET /playlist/album-tracks``,
   the manual-match flow: a person picks an album (search via the
-  existing ``GET /library/albums?folder=``), this lists that album's
+  existing ``GET /library/albums?q=``), this lists that album's
   actual audio files plus a best-effort ``suggested_path`` so they don't
   have to eyeball which one is right when it's obvious.
 """
