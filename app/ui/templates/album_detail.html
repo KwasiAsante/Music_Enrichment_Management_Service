@@ -15,6 +15,15 @@
     <p class="page-sub">This folder may have been renamed, moved, or removed in a rescan since you got here. <a href="{{ url_base }}/library">Back to Library</a></p>
     {% endif %}
   </div>
+  {% if detail %}
+  <div class="page-header-actions">
+    <button type="button" class="btn btn-primary btn-sm" id="reenrich-btn"
+            data-folder="{{ detail.folder }}" data-album="{{ detail.album }}">
+      ⟳ Re-enrich
+    </button>
+    <div id="reenrich-status" class="reenrich-status"></div>
+  </div>
+  {% endif %}
 </div>
 
 {% if detail %}

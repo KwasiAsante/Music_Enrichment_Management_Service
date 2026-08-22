@@ -157,6 +157,8 @@ html.sidebar-collapsed .sidebar-footer .status-dot { margin-right: 0; }
 .page { max-width: 1100px; margin: 0 auto; padding: 40px 32px 80px; }
 
 .page-header { margin-bottom: 32px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.page-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.reenrich-status { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: right; max-width: 320px; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
 h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; letter-spacing: -0.02em; background: var(--h1-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .page-sub { margin-top: 6px; color: var(--muted); font-size: 13px; font-family: 'DM Mono', monospace; }
