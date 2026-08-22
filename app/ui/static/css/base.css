@@ -211,6 +211,9 @@ button { font-family: 'Syne', sans-serif; font-weight: 700; cursor: pointer; bor
 .row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .row-actions input { background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 7px 10px; width: 110px; outline: none; }
 .row-actions input:focus { border-color: var(--accent); }
+.result-card-loading { opacity: 0.65; pointer-events: none; }
+.spinner { display: inline-block; width: 14px; height: 14px; margin: 4px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 580px) {
   /* List-mode result rows (Mappings' Search/Set/Skip buttons, mainly) —

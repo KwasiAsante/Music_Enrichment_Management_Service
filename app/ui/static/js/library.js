@@ -165,6 +165,34 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleGroup(header.closest('.artist-group'));
   });
 
+  // Album detail is a real server-rendered page (not a fetch call) — it
+  // can take a couple of seconds for a mapped album (MusicBrainz's rate
+  // limit alone adds 1.1s+, see app/core/mb_client.py). Show a spinner on
+  // the clicked row immediately so the click doesn't look like it did
+  // nothing while the browser waits on the navigation. Delegated on the
+  // stable container so it covers every render path (list/grid/grouped/
+  // skipped, server- or JS-rendered) without re-attaching per row.
+  document.getElementById('album-list').addEventListener('click', (e) => {
+    // Modifier/middle clicks open a new tab — this tab isn't navigating,
+    // so don't leave the row stuck spinning.
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const card = e.target.closest('.result-card[href]');
+    if (!card || card.classList.contains('result-card-loading')) return;
+    card.classList.add('result-card-loading');
+    card.insertAdjacentHTML('beforeend', '<span class="spinner"></span>');
+  });
+
+  // If the browser restores this page from bfcache (e.g. hitting Back
+  // after the click above), the DOM comes back exactly as it was mid
+  // navigation — spinner and all. Clear it so the row isn't stuck.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll('#album-list .result-card-loading').forEach((card) => {
+      card.classList.remove('result-card-loading');
+      card.querySelector('.spinner')?.remove();
+    });
+  });
+
   document.getElementById('prev-page').addEventListener('click', () => {
     if (state.page > 1) {
       state.page -= 1;
