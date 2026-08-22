@@ -191,8 +191,14 @@ def test_apply_overrides_writes_expected_tag_keys(isolated_env, tmp_path):
     assert fixed == 2
     assert len(fakes) == 2 and all(f.saved for f in fakes)
     for f in fakes:
+        # Singular tags every format is expected to support...
         assert f.tags["albumartist"] == ["Real Band Name"]
         assert f.tags["artist"] == ["Real Band Name"]
+        # ...and the plural forms (Picard-tagged FLACs carry these
+        # alongside the singular ones for multi-value artist credits) —
+        # our fake tag store accepts any key, same as real Vorbis comments.
+        assert f.tags["albumartists"] == ["Real Band Name"]
+        assert f.tags["artists"] == ["Real Band Name"]
         assert f.tags["genre"] == ["Rock"]
 
 
@@ -236,3 +242,39 @@ def test_apply_overrides_tolerates_a_tag_key_the_format_rejects(isolated_env, tm
         fixed = fo.FieldOverrideService().apply_overrides(album_dir, "Some/Folder")
 
     assert fixed == 1  # albumartist/artist still got written despite composer failing
+
+
+def test_apply_overrides_artist_plural_keys_tolerated_on_id3_like_formats(isolated_env, tmp_path):
+    """EasyID3 (MP3) only accepts 'albumartist'/'artist', not the plural
+    'albumartists'/'artists' forms FLAC's freeform Vorbis comments allow —
+    those extra candidate keys must be silently skipped there, not crash
+    the write for the keys the format *does* support."""
+    album_dir = tmp_path / "album"
+    album_dir.mkdir()
+    (album_dir / "01.mp3").touch()
+
+    store.field_overrides.write({
+        "Some/Folder": {"fields": {"artist": "Real Band Name"}},
+    })
+
+    id3_like_valid_keys = {"albumartist", "artist"}
+
+    class _ID3LikeTags(_FakeTags):
+        def __setitem__(self, key, value):
+            if key not in id3_like_valid_keys:
+                raise KeyError(f"{key!r} is not a valid key")
+            super().__setitem__(key, value)
+
+    class _ID3LikeAudio(_FakeAudio):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tags = _ID3LikeTags()
+
+    audio = _ID3LikeAudio()
+    with patch.object(fo, "MutagenFile", return_value=audio):
+        fixed = fo.FieldOverrideService().apply_overrides(album_dir, "Some/Folder")
+
+    assert fixed == 1
+    assert audio.tags["albumartist"] == ["Real Band Name"]
+    assert audio.tags["artist"] == ["Real Band Name"]
+    assert "artists" not in audio.tags and "albumartists" not in audio.tags

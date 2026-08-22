@@ -48,7 +48,7 @@ from typing import Any, Callable
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 
 from app.config import settings
-from app.core.field_overrides import FieldOverrideService
+from app.core.field_overrides import ARTIST_TAG_KEYS, FieldOverrideService
 from app.core.library_scanner import LibraryScanner
 from app.core.mb_client import MBClient
 from app.core.mb_link import MBLinkChecker
@@ -60,12 +60,6 @@ from app.storage.json_store import store
 log = logging.getLogger("music-lib-helper.beets_enricher")
 
 AUDIO_EXTENSIONS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
-
-# Tag fields beet/VGMplug may have written non-Latin values into.
-_ARTIST_TAG_KEYS = (
-    "albumartist", "artist", "album_artist",
-    "album_artists", "albumartists", "artists", "album artist",
-)
 
 # Indirection so tests can monkeypatch the subprocess call without
 # replacing the whole module's subprocess import.
@@ -713,7 +707,7 @@ class BeetsEnricher:
                 if not audio or not audio.tags:
                     continue
                 changed = False
-                for tag in _ARTIST_TAG_KEYS:
+                for tag in ARTIST_TAG_KEYS:
                     val = audio.tags.get(tag, [])
                     current = val[0] if isinstance(val, list) and val else str(val or "")
                     if current and _has_non_latin(current):

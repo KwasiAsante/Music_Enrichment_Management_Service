@@ -43,13 +43,25 @@ _LANG_PRIORITY = ("en", "ja-latn", "ja")
 _LANG_LABELS = {"en": "English", "ja-latn": "Romaji", "ja": "Japanese"}
 _LIST_SPLIT_RE = re.compile(r"[;,/]")
 
+# Every tag-key spelling a tagger might use for "the album's artist" —
+# both singular (albumartist/artist) and plural (some Picard-tagged
+# FLACs carry ARTISTS/ALBUMARTISTS vorbis comments alongside the
+# singular ones for multi-value artist credits), plus the space/
+# underscore variants. app/core/beets_enricher.py's non-Latin-tag fix
+# imports this constant too, so the two "which keys count as the artist
+# tag" lists can't drift apart.
+ARTIST_TAG_KEYS: tuple[str, ...] = (
+    "albumartist", "artist", "album_artist",
+    "album_artists", "albumartists", "artists", "album artist",
+)
+
 # Each overridable field maps to the mutagen "easy"-interface tag key(s)
-# actually written to the files. "artist" fans out to both albumartist
-# and artist — the same pairing BeetsEnricher._fix_non_latin_artist_tags
-# already treats as one concept, since that's what most players read for
-# "who is this album by".
+# actually written to the files. Writing to a key a given format doesn't
+# support (e.g. the plural forms on an MP3's restricted EasyID3 key set)
+# is caught and skipped per-key in apply_overrides() below, so listing
+# extra candidate keys per field is always safe.
 FIELD_TAG_KEYS: dict[str, tuple[str, ...]] = {
-    "artist":    ("albumartist", "artist"),
+    "artist":    ARTIST_TAG_KEYS,
     "composer":  ("composer",),
     "performer": ("performer",),
     "arranger":  ("arranger",),
@@ -143,7 +155,7 @@ class FieldOverrideService:
                 return None
 
             return {
-                "artist":    first("albumartist", "artist"),
+                "artist":    first(*ARTIST_TAG_KEYS),
                 "composer":  first("composer"),
                 "performer": first("performer"),
                 "arranger":  first("arranger"),
