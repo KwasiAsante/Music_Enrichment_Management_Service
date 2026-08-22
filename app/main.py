@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__, scheduler
-from app.api import artist, backup, enrich, library, logs, mapping, mb, picard, playlist, proxy, settings as settings_api
+from app.api import artist, backup, enrich, field_overrides, library, logs, mapping, mb, picard, playlist, proxy, settings as settings_api
 from app.config import settings
 from app.core.beets_config import sync_beets_vgmdb_url, validate_beet_bin
 from app.logging_config import setup_logging
@@ -103,6 +103,7 @@ ui.templates.env.globals["url_base"] = settings.url_base
 app.include_router(library.router)
 app.include_router(artist.router)
 app.include_router(mapping.router)
+app.include_router(field_overrides.router)
 app.include_router(mb.router)
 app.include_router(picard.router)
 app.include_router(playlist.router)

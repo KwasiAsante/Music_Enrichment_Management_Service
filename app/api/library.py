@@ -105,16 +105,24 @@ def _filtered_entries(
     unmapped: bool,
     enriched: bool,
     source: str | None,
+    q: str | None = None,
 ) -> list[AlbumEntry]:
     """Shared filter/build logic behind both ``/albums`` and
     ``/albums/grouped`` — one place for the filtering policy so the two
-    views can never quietly drift apart."""
+    views can never quietly drift apart.
+
+    ``q``, unlike ``artist``/``folder``, is OR'd across artist, album,
+    and folder — a single free-text box that finds an album whichever
+    of those three the person happens to remember. Combines (AND) with
+    the other filters when both are given.
+    """
     album_list = store.album_list.read()
     mapping = store.vgmdb_mapping.read()
     enriched_set = store.enriched_set()
 
     artist_q = artist.lower() if artist else None
     folder_q = folder.lower() if folder else None
+    free_q = q.lower() if q else None
 
     entries: list[AlbumEntry] = []
     for folder_name, info in album_list.items():
@@ -123,10 +131,17 @@ def _filtered_entries(
         is_enriched = bool(mb_id and mb_id in enriched_set)
         mapping_entry = mapping.get(mb_id) if mb_id else None
         mapping_source = mapping_entry.get("source") if mapping_entry else None
+        folder_path = info.get("folder") or folder_name
 
         if artist_q and artist_q not in info.get("artist", "").lower():
             continue
-        if folder_q and folder_q not in (info.get("folder") or folder_name).lower():
+        if folder_q and folder_q not in folder_path.lower():
+            continue
+        if free_q and not (
+            free_q in info.get("artist", "").lower()
+            or free_q in info.get("album", "").lower()
+            or free_q in folder_path.lower()
+        ):
             continue
         if unmapped and mapped:
             continue
@@ -225,6 +240,13 @@ def list_albums(
         "(any auto-resolved reason), or none to not filter. Albums with no "
         "mapping never match a non-empty source filter.",
     ),
+    q: str | None = Query(
+        default=None,
+        description="Free-text search across artist, album, and folder "
+        "(OR'd, case-insensitive substring) — backs the Field Overrides "
+        "page's single search box. Combines (AND) with artist/folder "
+        "when both are given.",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> AlbumsPage:
@@ -237,7 +259,7 @@ def list_albums(
     """
     entries = _filtered_entries(
         artist=artist, folder=folder, unmapped=unmapped,
-        enriched=enriched, source=source,
+        enriched=enriched, source=source, q=q,
     )
 
     total = len(entries)

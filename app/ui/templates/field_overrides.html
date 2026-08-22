@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Field Overrides — Music Library Helper{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="eyebrow">▸ Manual Tag Mapping</div>
+    <h1>Field Overrides</h1>
+    <p class="page-sub">Pin which VGMDB value writes to which tag, per album — for when VGMDB's composer/performer credits don't match what MusicBrainz already has as the real artist.</p>
+  </div>
+</div>
+
+{% set tip_key = "field-overrides" %}
+{% set tip_text = "Search an album, pick a value per field from VGMDB's own credits (or type a custom one), and Save. It takes effect the next time that album is (re-)enriched — see the Enrich page's Redo to force it now." %}
+{% set tip_href = url_base ~ "/help#field-overrides" %}
+{% include "_tip_banner.html" %}
+
+<div class="filter-bar">
+  <div class="cf" style="flex:1">
+    <label>Search</label>
+    <input type="text" id="search-input" placeholder="Album, artist, or folder name...">
+  </div>
+</div>
+
+<section>
+  <div class="section-label">Results (<span id="search-count">0</span>)</div>
+  <div id="search-results">
+    <div class="empty">
+      <div class="empty-icon">⌕</div>
+      Start typing to find an album.
+    </div>
+  </div>
+</section>
+
+<section id="editor-section" style="display:none;">
+  <div class="section-label" id="editor-title">Editing</div>
+  <div id="editor-meta" class="info-meta" style="margin-bottom:14px;"></div>
+  <div id="editor-warnings"></div>
+  <div id="editor-fields" class="settings-fields"></div>
+  <div class="backup-row" style="margin-top:16px;">
+    <button type="button" class="btn btn-success btn-sm" id="save-overrides-btn">Save Mapping</button>
+    <button type="button" class="btn btn-danger-ghost btn-sm" id="clear-overrides-btn">Clear All Overrides</button>
+  </div>
+  <div id="editor-result" class="import-result"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/field_overrides.js') }}" defer></script>
+{% endblock %}

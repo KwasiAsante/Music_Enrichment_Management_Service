@@ -15,6 +15,7 @@ ALL_PAGES = [
     "/",
     "/music-search",
     "/mappings",
+    "/overrides",
     "/enrich",
     "/library",
     "/library?view=skipped",
@@ -48,7 +49,7 @@ def test_nav_order_matches_workflow(client: TestClient, auth):
         r'<span class="icon">.*?</span><span class="label">([^<]+)</span>', r.text,
     )
     assert labels == [
-        "Dashboard", "Music Search", "Mappings", "Enrich",
+        "Dashboard", "Music Search", "Mappings", "Field Overrides", "Enrich",
         "Library", "Playlists", "Logs", "Help", "Settings",
     ]
 
@@ -57,6 +58,7 @@ def test_nav_order_matches_workflow(client: TestClient, auth):
     ("/", "Dashboard"),
     ("/music-search", "Music Search"),
     ("/mappings", "Mappings"),
+    ("/overrides", "Field Overrides"),
     ("/enrich", "Enrich"),
     ("/library", "Library"),
     ("/playlists", "Playlists"),

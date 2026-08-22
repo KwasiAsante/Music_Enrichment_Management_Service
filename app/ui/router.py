@@ -17,6 +17,13 @@ these are top-level paths so they read naturally in a browser
 * ``GET /enrich``    — Real data: recent ``enrich``-category activity.
                         Run form + live job polling via
                         ``static/js/enrich.js``.
+* ``GET /overrides`` — Static shell, no server-rendered data. Search
+                        (against ``GET /api/v1/library/albums?q=``) and
+                        the per-album field/value picker (against
+                        ``/api/v1/overrides/*``) are both wired live via
+                        ``static/js/field_overrides.js`` — see
+                        ``app.core.field_overrides`` for why this page
+                        exists.
 * ``GET /library``   — Real data: :func:`app.api.library.list_albums`,
                         :func:`app.api.library.list_albums_grouped` (group-
                         by-artist view), or :func:`app.api.library.list_skipped`
@@ -180,6 +187,15 @@ def enrich_page(request: Request) -> HTMLResponse:
     )
 
 
+# ── GET /overrides ───────────────────────────────────────────────────────────
+@router.get("/overrides", response_class=HTMLResponse)
+def field_overrides_page(request: Request) -> HTMLResponse:
+    """Search-and-map page for per-album tag field overrides — static
+    shell, no server-rendered data (search results depend on whatever's
+    typed into the box)."""
+    return templates.TemplateResponse(request, "field_overrides.html", {})
+
+
 # ── GET /library ─────────────────────────────────────────────────────────────
 @router.get("/library", response_class=HTMLResponse)
 def library_page(
@@ -206,6 +222,7 @@ def library_page(
         unmapped=(view == "unmapped"),
         enriched=(view == "enriched"),
         source=source,
+        q=None,
         page=1,
         limit=50,
     )

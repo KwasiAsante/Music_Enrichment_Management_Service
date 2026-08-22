@@ -147,6 +147,17 @@
   </ul>
 </section>
 
+<section class="help-section" id="field-overrides">
+  <h2><span class="icon">✎</span> Field Overrides</h2>
+  <p class="help-intro">For albums where VGMDB's own composer/performer/arranger credits don't match what MusicBrainz already has as the real artist — a band's touring drummer credited as "composer", for instance.</p>
+  <ul class="help-list">
+    <li>Search by album, artist, or folder name; picking a result opens every overridable field (artist, composer, performer, arranger, lyricist, genre, label, catalog) for that album.</li>
+    <li>Each field lists every value VGMDB actually offers for it (per credit role, per language), plus what's currently on disk — pick one, or choose <strong>Custom value…</strong> to type something VGMDB doesn't have at all.</li>
+    <li><strong>Save Mapping</strong> only stores the choice — it doesn't touch any files. It takes effect the next time that album is (re-)enriched; for an already-enriched album, use the <a href="{{ url_base }}/enrich">Enrich page</a>'s <strong>Redo</strong> to force it now.</li>
+    <li><strong>Clear All Overrides</strong> removes every saved override for that album, reverting to whatever VGMDB/beets would pick on their own.</li>
+  </ul>
+</section>
+
 <section class="help-section" id="enrich">
   <h2><span class="icon">▶</span> Enrich</h2>
   <p class="help-intro">Runs the bulk tagging pass that writes resolved VGMDB metadata into your audio files.</p>

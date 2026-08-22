@@ -10,6 +10,8 @@ the data volume (``settings.app_data_dir``):
     skipped_albums.json   {mb_id: {vgmdb_id, folder, artist, album,
                                    match_percentage, threshold, skipped_reason}}
     excluded_artists.json [artist_name, ...]  (Western acts w/ no VGMDB presence)
+    field_overrides.json  {folder: {mb_release_id, artist, album,
+                                     fields: {field_name: value}}}
 
 They stay plain JSON on purpose — the standalone CLI scripts in
 ``scripts/`` read and write the exact same files, and they're trivial to
@@ -125,6 +127,8 @@ class JsonStore:
         self.excluded_artists = JsonFile(
             data_dir / "excluded_artists.json", list(_DEFAULT_EXCLUDED_ARTISTS),
         )
+        # Per-album manual tag-field overrides — see app/core/field_overrides.py.
+        self.field_overrides = JsonFile(data_dir / "field_overrides.json", {})
         # artists_mbids.json is a *list* on disk (matches the format the Picard
         # export pipeline uploads to a GitHub Gist), but the exporter treats it
         # as a dict-keyed-by-Artist internally for merging.

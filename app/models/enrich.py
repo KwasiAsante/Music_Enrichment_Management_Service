@@ -46,6 +46,12 @@ class EnrichAlbumResult(BaseModel):
     match: str | None = None
     already_enriched: bool = False
     tags_fixed: int = 0
+    fields_overridden: int = Field(
+        default=0,
+        description="Files whose tags were rewritten from a saved "
+        "field-override mapping (see /api/v1/overrides) — see "
+        "app.core.field_overrides.",
+    )
     seed_category: str | None = Field(
         default=None,
         description="Discord category the MB seed URL was posted to, if any.",

@@ -48,6 +48,7 @@ from typing import Any, Callable
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 
 from app.config import settings
+from app.core.field_overrides import FieldOverrideService
 from app.core.library_scanner import LibraryScanner
 from app.core.mb_client import MBClient
 from app.core.mb_link import MBLinkChecker
@@ -155,12 +156,14 @@ class BeetsEnricher:
         notifier: Notifier | None = None,
         mb_link: MBLinkChecker | None = None,
         scanner: LibraryScanner | None = None,
+        field_overrides: FieldOverrideService | None = None,
     ) -> None:
         self.mb = mb or MBClient()
         self.mapper = mapper or VGMDBMapper()
         self.notifier = notifier or Notifier()
         self.mb_link = mb_link or MBLinkChecker()
         self.scanner = scanner or LibraryScanner()
+        self.field_overrides = field_overrides or FieldOverrideService()
         self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
 
     # ── public: per-album entry point ───────────────────────────────────
@@ -196,14 +199,28 @@ class BeetsEnricher:
             return self._fail("folder_not_found", artist, album, mb_release_id,
                               f"album folder not found: {info.get('folder')!r}")
 
+        # field_overrides.json keys by folder-relative-to-artist-root (the
+        # same identifier album_list.json/AlbumDetail use) — but info["folder"]
+        # is an *absolute* path on the Lidarr OnAlbumDownload path (see
+        # app/api/enrich.py), so re-derive the relative form here rather
+        # than trusting info["folder"] directly.
+        try:
+            override_folder_key = str(album_folder.relative_to(self.artist_root))
+        except ValueError:
+            override_folder_key = str(album_folder)
+
         # ── already-enriched short-circuit ──────────────────────────────
         enriched = store.enriched_set()
         if mb_release_id and mb_release_id in enriched:
+            fields_overridden = self.field_overrides.apply_overrides(
+                album_folder, override_folder_key,
+            )
             return {
                 "ok": True, "already_enriched": True,
                 "vgmdb_id": None, "match": None,
                 "source": "enriched_log", "message": "already enriched",
                 "artist": artist, "album": album, "mb_release_id": mb_release_id,
+                "fields_overridden": fields_overridden,
             }
 
         # ── resolve VGMDB id ────────────────────────────────────────────
@@ -285,6 +302,7 @@ class BeetsEnricher:
 
         # ── success path ────────────────────────────────────────────────
         tags_fixed = self._fix_non_latin_artist_tags(album_folder, artist)
+        fields_overridden = self.field_overrides.apply_overrides(album_folder, override_folder_key)
         if mb_release_id:
             enriched.add(mb_release_id)
             store.save_enriched_set(enriched)
@@ -309,13 +327,15 @@ class BeetsEnricher:
         db.add_activity(
             "enrich",
             f"enriched vgmdb:{vgmdb_id} ({match_pct})"
-            + (f" — fixed {tags_fixed} non-Latin tags" if tags_fixed else ""),
+            + (f" — fixed {tags_fixed} non-Latin tags" if tags_fixed else "")
+            + (f" — applied {fields_overridden} field override(s)" if fields_overridden else ""),
             artist=artist, album=album,
         )
 
         return {
             "ok": True, "vgmdb_id": vgmdb_id, "source": source,
             "match": match_pct, "tags_fixed": tags_fixed,
+            "fields_overridden": fields_overridden,
             "seed_category": posted_to,
             "message": "enrichment complete",
             "artist": artist, "album": album, "mb_release_id": mb_release_id,
