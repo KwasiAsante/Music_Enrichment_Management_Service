@@ -94,7 +94,8 @@ def main() -> int:
         )
 
     # Forward Picard's %folderpath% as-is. The helper walks up from disc
-    # or album subfolders to the artist folder under synced_music/Artist/.
+    # or album subfolders to the configured artist root (see
+    # settings.artist_root_subpath server-side).
     artist_folder = raw
 
     payload = {"artist_folder": artist_folder}

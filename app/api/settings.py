@@ -117,6 +117,13 @@ FIELD_CATALOG: list[tuple[str, str, str, str, list[str] | None, str | None]] = [
      "detail from feature log files; INFO shows summaries only."),
     ("tz", "Timezone", "General", "text", None,
      "IANA timezone name, e.g. America/Toronto — used for the schedule below."),
+    ("artist_root_subpath", "Artist Root Folder", "General", "text", None,
+     "Where artist folders live, relative to the Music Directory below. Default "
+     "<code>Artist</code> assumes they sit directly under the mount — add a wrapper "
+     "segment (e.g. <code>synced_music/Artist</code>) if your mount has one, or give "
+     "an absolute path if artist folders live outside the music mount. Every "
+     "scan/enrich/export feature resolves artist folders from this, and it's kept in sync with beets' own "
+     "<code>directory</code> setting."),
 
     ("scan_cron", "Library Scan Schedule", "Schedule", "text", None,
      'Standard 5-field cron: <code>minute hour day-of-month month day-of-week</code>. '

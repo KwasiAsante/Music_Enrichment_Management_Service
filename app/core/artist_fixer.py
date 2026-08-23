@@ -148,7 +148,7 @@ class ArtistFixer:
         self.mb = mb or MBClient()
         self.notifier = notifier or Notifier()
         self.scanner = scanner or LibraryScanner()
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        self.artist_root: Path = settings.artist_root
 
     # ── disk indexing ───────────────────────────────────────────────────
     def _build_mb_id_to_folder_map(self) -> dict[str, str]:

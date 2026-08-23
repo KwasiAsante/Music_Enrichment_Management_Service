@@ -108,7 +108,7 @@ class FieldOverrideService:
 
     def __init__(self, vgmdb: VGMDBClient | None = None) -> None:
         self.vgmdb = vgmdb or VGMDBClient()
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        self.artist_root: Path = settings.artist_root
 
     # ── lookup ───────────────────────────────────────────────────────────
     def _find_album(self, folder: str) -> dict[str, Any] | None:

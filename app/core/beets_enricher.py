@@ -158,7 +158,7 @@ class BeetsEnricher:
         self.mb_link = mb_link or MBLinkChecker()
         self.scanner = scanner or LibraryScanner()
         self.field_overrides = field_overrides or FieldOverrideService()
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        self.artist_root: Path = settings.artist_root
 
     # ── public: per-album entry point ───────────────────────────────────
     def enrich_album(

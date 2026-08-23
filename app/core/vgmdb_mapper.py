@@ -136,7 +136,7 @@ class VGMDBMapper:
     ) -> None:
         self.mb = mb or MBClient()
         self.vgmdb = vgmdb or VGMDBClient()
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        self.artist_root: Path = settings.artist_root
 
     # ── search pipeline ────────────────────────────────────────────────
     def search(

@@ -119,6 +119,16 @@ class Settings(BaseSettings):
     # ── Paths (inside the container) ────────────────────────────────────────
     app_data_dir: Path = Path("/data")
     app_music_dir: Path = Path("/music")
+    # Where artist folders live, relative to app_music_dir (an absolute
+    # value overrides app_music_dir entirely, same as any other pathlib
+    # join) — every module that scans/writes artist folders derives its
+    # root from this (see `artist_root` below) so the on-disk layout only
+    # needs to be set in one place. Also kept in sync with beets'
+    # `directory:` in config.yaml — see app/core/beets_config.py.
+    # Default assumes artist folders sit directly under the music mount
+    # (APP_MUSIC_DIR/Artist/<name>/<album>) — set this to whatever extra
+    # wrapper folders your own layout actually has, if any.
+    artist_root_subpath: str = "Artist"
 
     # ── Service ─────────────────────────────────────────────────────────────
     app_log_level: str = "INFO"
@@ -149,6 +159,13 @@ class Settings(BaseSettings):
         return v
 
     # ── Derived data-file locations ─────────────────────────────────────────
+    @property
+    def artist_root(self) -> Path:
+        """Resolved artist-folder root — `artist_root_subpath` joined
+        onto `app_music_dir` unless it's already absolute."""
+        p = Path(self.artist_root_subpath)
+        return p if p.is_absolute() else self.app_music_dir / p
+
     @property
     def vgmdb_mapping_file(self) -> Path:
         return self.app_data_dir / "vgmdb_mapping.json"

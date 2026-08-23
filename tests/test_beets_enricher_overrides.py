@@ -44,7 +44,7 @@ def _make_enricher(field_overrides_return: int = 0) -> tuple[BeetsEnricher, Magi
 
 
 def _make_album_folder(isolated_env) -> Path:
-    folder = isolated_env.music_dir / "synced_music" / "Artist" / "Some Artist" / "Some Album"
+    folder = isolated_env.music_dir / "Artist" / "Some Artist" / "Some Album"
     folder.mkdir(parents=True)
     return folder
 

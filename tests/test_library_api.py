@@ -84,7 +84,7 @@ def test_grouped_view_respects_filters(client: TestClient, auth, isolated_env):
 # ── cover art ────────────────────────────────────────────────────────────
 def test_art_endpoint_front_and_back(client: TestClient, auth, isolated_env):
     music_dir = isolated_env.music_dir
-    album_dir = music_dir / "synced_music" / "Artist" / "Test Artist" / "Test Album"
+    album_dir = music_dir / "Artist" / "Test Artist" / "Test Album"
     album_dir.mkdir(parents=True)
     (album_dir / "cover.jpg").write_bytes(b"FRONTFILE")
     (album_dir / "back.png").write_bytes(b"BACKFILE")

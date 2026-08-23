@@ -17,7 +17,7 @@ def _touch(root: Path, *parts: str) -> Path:
 
 
 def _artist_root(isolated_env) -> Path:
-    return isolated_env.music_dir / "synced_music" / "Artist"
+    return isolated_env.music_dir / "Artist"
 
 
 def test_convert_rejects_unsupported_extension(client: TestClient, auth):

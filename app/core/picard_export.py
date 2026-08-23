@@ -53,7 +53,7 @@ class PicardExporter:
     """
 
     def __init__(self) -> None:
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        self.artist_root: Path = settings.artist_root
 
     # ── public: single-artist (the Picard hook) ─────────────────────────
     def export_one(
@@ -170,17 +170,22 @@ class PicardExporter:
     @staticmethod
     def _artist_name_from_library_path(given: str | Path) -> str | None:
         """Extract the artist folder name from any path that contains the
-        ``…/synced_music/Artist/<name>/…`` segment.
+        configured artist-root tail (``settings.artist_root_subpath``,
+        e.g. ``…/synced_music/Artist/<name>/…``).
 
         Picard often reports a host/container path (e.g. ``/storage/…``)
         while the helper sees the library under ``app_music_dir`` (e.g.
         ``/music/…``). Matching on this stable tail avoids needing the
         roots to line up.
         """
-        parts = Path(str(given)).parts
-        for i in range(len(parts) - 2):
-            if parts[i].casefold() == "synced_music" and parts[i + 1].casefold() == "artist":
-                return parts[i + 2]
+        root_parts = [p.casefold() for p in Path(settings.artist_root_subpath).parts]
+        if not root_parts:
+            return None
+        parts = [p.casefold() for p in Path(str(given)).parts]
+        n = len(root_parts)
+        for i in range(len(parts) - n):
+            if parts[i:i + n] == root_parts:
+                return Path(str(given)).parts[i + n]
         return None
 
     def _match_artist_folder_by_name(self, name: str) -> Path | None:
@@ -204,8 +209,9 @@ class PicardExporter:
         Resolution order:
         1. Walk up from ``given`` when it exists on disk until a direct
            child of ``artist_root`` is found.
-        2. Parse ``…/synced_music/Artist/<name>/…`` from the path string
-           and map ``<name>`` under ``artist_root`` — handles Picard host
+        2. Parse the configured artist-root tail (e.g.
+           ``…/synced_music/Artist/<name>/…``) from the path string and
+           map ``<name>`` under ``artist_root`` — handles Picard host
            paths like ``/storage/…`` vs helper paths like ``/music/…``.
         3. ``artist_root / basename(given)`` for bare-name inputs.
         """

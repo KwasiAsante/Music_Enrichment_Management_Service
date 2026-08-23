@@ -1,9 +1,10 @@
 """Keep beets' on-disk config aligned with this app's runtime settings.
 
 Beets reads ``BEETSDIR/config.yaml`` directly — including
-``VGMplug.baseurl`` — and ignores our pydantic ``settings.vgmdb_url``
-unless we sync it here. The Docker image bakes a fallback ``baseurl``
-at build time, which drifts from the live ``VGMDB_URL`` env var unless
+``VGMplug.baseurl`` and ``directory`` — and ignores our pydantic
+``settings.vgmdb_url``/``settings.artist_root`` unless we sync them
+here. The Docker image bakes fallback values at build time, which
+drift from the live env vars / saved Settings-page overrides unless
 patched on startup.
 """
 
@@ -44,6 +45,37 @@ def sync_beets_vgmdb_url() -> None:
     )
     config_path.write_text(updated, encoding="utf-8")
     log.info("synced beets VGMplug.baseurl: %s -> %s", current, desired)
+
+
+def sync_beets_directory() -> None:
+    """Write ``settings.artist_root`` into beets' top-level ``directory``
+    if needed — keeps ``config.yaml`` in step with
+    ``ARTIST_ROOT_SUBPATH`` (or a Settings-page override) instead of
+    each drifting from a value baked into the image at build time."""
+    config_path = Path(settings.beetsdir) / "config.yaml"
+    if not config_path.is_file():
+        log.debug("beets config not found at %s — skipping directory sync", config_path)
+        return
+
+    desired = str(settings.artist_root)
+    text = config_path.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^(directory:\s*)(.+)$", text)
+    if not match:
+        log.warning("beets config at %s has no top-level directory line", config_path)
+        return
+
+    current = match.group(2).strip().strip("'\"")
+    if current == desired:
+        return
+
+    updated = re.sub(
+        r"(?m)^(directory:\s*).+$",
+        rf"\g<1>{desired}",
+        text,
+        count=1,
+    )
+    config_path.write_text(updated, encoding="utf-8")
+    log.info("synced beets directory: %s -> %s", current, desired)
 
 
 def validate_beet_bin() -> None:

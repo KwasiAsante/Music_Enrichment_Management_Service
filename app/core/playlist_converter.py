@@ -414,16 +414,16 @@ def default_artist_root() -> Path:
     """The artist root ``convert()`` uses when the caller doesn't pass
     one explicitly — shared with the manual-match endpoints so they
     resolve album/track paths against the exact same root."""
-    return settings.app_music_dir / "synced_music" / "Artist"
+    return settings.artist_root
 
 
 def default_navidrome_music_root() -> Path:
     """The folder, as *this* container sees it, that corresponds to
     Navidrome's own music-folder mount (``default_artist_root()``'s
     parent) — Navidrome typically mounts that same host folder at a
-    different container path (e.g. its ``/music`` vs. this app's
-    ``/music/synced_music``), so entries written into an exported
-    playlist need to be re-rooted at Navidrome's own mount point (see
+    different container path than this app's own artist root sits
+    under, so entries written into an exported playlist need to be
+    re-rooted at Navidrome's own mount point (see
     :func:`navidrome_absolute_path`), not this container's."""
     return default_artist_root().parent
 

@@ -66,8 +66,8 @@ class LibraryScanner:
     """
 
     def __init__(self) -> None:
-        # Matches `directory: /music/synced_music/Artist` in config.yaml.
-        self.artist_root: Path = settings.app_music_dir / "synced_music" / "Artist"
+        # Matches `directory:` in config.yaml — see app/core/beets_config.py.
+        self.artist_root: Path = settings.artist_root
 
     # ── folder predicates ───────────────────────────────────────────────
     @staticmethod

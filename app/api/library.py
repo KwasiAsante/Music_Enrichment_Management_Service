@@ -330,9 +330,7 @@ def _resolve_album_dir(folder: str) -> Path:
     the artist root, raising 400 if it would escape it (path traversal).
     Shared by every endpoint that touches the filesystem for one album.
     """
-    # Same "artist root" convention used throughout app/core/* — see
-    # LibraryScanner, VGMDBMapper, BeetsEnricher.
-    artist_root = (settings.app_music_dir / "synced_music" / "Artist").resolve()
+    artist_root = settings.artist_root.resolve()
     album_dir = (artist_root / folder).resolve()
     if not album_dir.is_relative_to(artist_root):
         raise HTTPException(400, "folder must resolve inside the artist root")

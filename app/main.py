@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__, scheduler
 from app.api import artist, backup, enrich, field_overrides, library, logs, mapping, mb, picard, playlist, proxy, settings as settings_api
 from app.config import settings
-from app.core.beets_config import sync_beets_vgmdb_url, validate_beet_bin
+from app.core.beets_config import sync_beets_directory, sync_beets_vgmdb_url, validate_beet_bin
 from app.logging_config import setup_logging
 from app.storage import db
 from app.ui import router as ui
@@ -61,9 +61,11 @@ async def lifespan(app: FastAPI):
     # Create the SQLite schema (jobs + activity_log). Idempotent.
     db.init_db()
 
-    # Beets reads VGMplug.baseurl from BEETSDIR/config.yaml, not from
-    # settings.vgmdb_url — sync so the subprocess sees the live URL.
+    # Beets reads VGMplug.baseurl and directory from BEETSDIR/config.yaml,
+    # not from settings.vgmdb_url/settings.artist_root — sync so the
+    # subprocess sees the live values.
     sync_beets_vgmdb_url()
+    sync_beets_directory()
     validate_beet_bin()
 
     # Start the in-process scheduler (Sunday scan + enrich crons).
