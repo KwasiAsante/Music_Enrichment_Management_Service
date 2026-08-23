@@ -154,6 +154,20 @@ FIELD_CATALOG: list[tuple[str, str, str, str, list[str] | None, str | None]] = [
 
     ("vgmdb_url", "VGMDB API URL", "VGMDB", "text", None, None),
 
+    ("navidrome_playlist_dir", "Navidrome Playlist Folder", "Navidrome", "text", None,
+     "Where converted playlists get written for Navidrome to auto-import — matches its "
+     "own ND_PLAYLISTSPATH / ND_AUTOIMPORTPLAYLISTS config. Relative to this app's music "
+     "directory (e.g. <code>synced_music/Playlists</code>), so it follows whatever that's "
+     "configured to in this environment — give an absolute path instead only if you need "
+     "somewhere outside the music mount. Leave blank to disable the Playlists page's "
+     "\"Export to Navidrome\" button."),
+    ("navidrome_music_path_prefix", "Navidrome Music Mount Path", "Navidrome", "text", None,
+     "The music-folder mount point as Navidrome's own container sees it — the right-hand "
+     "side of its docker-compose volume line, e.g. <code>- ~/Music/synced_music:/music</code> "
+     "&rarr; <code>/music</code>. Used to write playlist entries as paths Navidrome can "
+     "resolve — it does not read paths relative to the playlist file itself, only ones "
+     "rooted at its own music mount."),
+
     ("mb_user_agent", "MusicBrainz User-Agent", "MusicBrainz", "text", None,
      "MusicBrainz requires a descriptive User-Agent identifying your app "
      "and a contact method — see their API rate-limiting docs."),

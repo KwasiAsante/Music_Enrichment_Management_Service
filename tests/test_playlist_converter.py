@@ -13,7 +13,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import app.core.playlist_converter as pc
-from app.core.playlist_converter import convert, list_album_tracks, parse_playlist, resolve_within_album
+from app.core.playlist_converter import (
+    PlaylistEntry,
+    build_navidrome_playlist_text,
+    convert,
+    list_album_tracks,
+    navidrome_absolute_path,
+    parse_playlist,
+    resolve_within_album,
+)
 
 
 def _touch(root: Path, *parts: str) -> Path:
@@ -429,3 +437,71 @@ def test_convert_whole_library_fuzzy_rejects_without_tag_corroboration(tmp_path:
         result = convert(playlist, artist_root=root)
 
     assert result.entries[0].method == "unmatched"
+
+
+# ── navidrome_absolute_path / build_navidrome_playlist_text ─────────────────
+
+def test_navidrome_absolute_path_uses_navidrome_mount_prefix(tmp_path: Path):
+    # Real-world layout: this app's artist_root sits under a "synced_music"
+    # folder that Navidrome mounts as its own music root at a different
+    # container path ("/music" here) — confirmed against a real instance,
+    # whose own generated playlists use this exact absolute-path shape
+    # (a relative-to-playlist-file form was tried and confirmed not to
+    # resolve correctly there).
+    music_root = tmp_path / "synced_music"
+    artist_root = music_root / "Artist"
+
+    absolute = navidrome_absolute_path(
+        "Artist A/Album 1/01 - Song.flac",
+        artist_root=artist_root, navidrome_music_root=music_root, music_prefix="/music",
+    )
+    assert absolute == "/music/Artist/Artist A/Album 1/01 - Song.flac"
+
+
+def test_navidrome_absolute_path_strips_trailing_slash_on_prefix(tmp_path: Path):
+    music_root = tmp_path / "synced_music"
+    artist_root = music_root / "Artist"
+
+    absolute = navidrome_absolute_path(
+        "Artist A/Album 1/01 - Song.flac",
+        artist_root=artist_root, navidrome_music_root=music_root, music_prefix="/music/",
+    )
+    assert absolute == "/music/Artist/Artist A/Album 1/01 - Song.flac"
+
+
+def test_build_navidrome_playlist_text_writes_extm3u_header_and_extinf(tmp_path: Path):
+    music_root = tmp_path / "synced_music"
+    artist_root = music_root / "Artist"
+
+    entries = [
+        PlaylistEntry(
+            line_no=1, original_path="/old/Song.flac", extinf="#EXTINF:100,Artist A - Song",
+            resolved_path="Artist A/Album 1/01 - Song.flac", method="unchanged",
+        ),
+    ]
+    text = build_navidrome_playlist_text(
+        entries, artist_root=artist_root, navidrome_music_root=music_root, music_prefix="/music",
+    )
+
+    assert text.splitlines() == [
+        "#EXTM3U",
+        "#EXTINF:100,Artist A - Song",
+        "/music/Artist/Artist A/Album 1/01 - Song.flac",
+    ]
+
+
+def test_build_navidrome_playlist_text_marks_unmatched_entries(tmp_path: Path):
+    music_root = tmp_path / "synced_music"
+    artist_root = music_root / "Artist"
+
+    entries = [
+        PlaylistEntry(
+            line_no=1, original_path="/old/Gone.flac", extinf=None,
+            resolved_path=None, method="unmatched",
+        ),
+    ]
+    text = build_navidrome_playlist_text(
+        entries, artist_root=artist_root, navidrome_music_root=music_root, music_prefix="/music",
+    )
+
+    assert text.splitlines() == ["#EXTM3U", "# UNMATCHED: /old/Gone.flac"]

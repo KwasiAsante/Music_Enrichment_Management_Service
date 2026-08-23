@@ -59,6 +59,27 @@ class Settings(BaseSettings):
     # ── VGMDB ───────────────────────────────────────────────────────────────
     vgmdb_url: str = "http://192.168.2.130:8008"
 
+    # ── Navidrome ───────────────────────────────────────────────────────────
+    # Where converted playlists get written for Navidrome to auto-import
+    # (its ND_PLAYLISTSPATH/ND_AUTOIMPORTPLAYLISTS) — resolved relative to
+    # app_music_dir (see navidrome_playlist_path below), so it follows
+    # whatever that resolves to in each environment (the container's
+    # /music in Docker, a different override under local debug configs)
+    # the same way default_artist_root() already does. An absolute path
+    # here overrides app_music_dir entirely, same as any other os.path/
+    # pathlib join. Blank disables the export endpoint; the browser
+    # download flow always works regardless. See
+    # app/core/playlist_converter.py.
+    navidrome_playlist_dir: str = ""
+    # The music-folder mount point as Navidrome's own container sees it
+    # (its docker-compose volume target, e.g. "- ~/Music/synced_music:/music"
+    # -> "/music"). Entries in an exported playlist are written relative
+    # to this, not this app's own mount point, since the two containers
+    # commonly mount the same host folder at different container paths.
+    # Confirmed necessary against a real instance — see
+    # app/core/playlist_converter.navidrome_absolute_path.
+    navidrome_music_path_prefix: str = "/music"
+
     # ── Web UI login (Phase 2) ──────────────────────────────────────────────
     # HTTP Basic Auth on the browser-facing pages only (app.ui.router) — the
     # REST API under /api/v1/* stays open so lidarr-scripts/on_album_download.py
@@ -143,6 +164,17 @@ class Settings(BaseSettings):
     @property
     def mb_artist_cache_file(self) -> Path:
         return self.app_data_dir / "mb_artist_cache.json"
+
+    @property
+    def navidrome_playlist_path(self) -> Path | None:
+        """Resolved Navidrome export target, or ``None`` when unconfigured
+        (``navidrome_playlist_dir`` blank). Joined onto ``app_music_dir``
+        so it tracks whatever that resolves to in the current environment
+        — an absolute ``navidrome_playlist_dir`` overrides it entirely,
+        same as any other pathlib join."""
+        if not self.navidrome_playlist_dir:
+            return None
+        return self.app_music_dir / self.navidrome_playlist_dir
 
     @property
     def db_path(self) -> Path:

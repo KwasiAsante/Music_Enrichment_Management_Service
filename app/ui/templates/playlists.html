@@ -11,7 +11,7 @@
 </div>
 
 {% set tip_key = "playlists" %}
-{% set tip_text = "Nothing is written on the server — upload a playlist, fix any unmatched tracks by hand below, then download the fixed copy." %}
+{% set tip_text = "Upload a playlist, fix any unmatched tracks by hand below, then download the fixed copy — or export it straight to your configured Navidrome playlist folder." %}
 {% set tip_href = url_base ~ "/help#playlists" %}
 {% include "_tip_banner.html" %}
 
@@ -21,6 +21,7 @@
     <input type="file" id="playlist-file" accept=".m3u,.m3u8,audio/x-mpegurl" required>
     <button class="btn btn-primary btn-sm" type="submit" id="convert-btn">Convert</button>
     <button class="btn btn-ghost btn-sm" type="button" id="download-btn" style="display:none;">⇩ Download converted playlist</button>
+    <button class="btn btn-ghost btn-sm" type="button" id="export-navidrome-btn" style="display:none;">▸ Export to Navidrome</button>
   </form>
   <div id="convert-result" class="import-result"></div>
 </section>

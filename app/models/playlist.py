@@ -80,3 +80,35 @@ class AlbumTracksResult(BaseModel):
         "'original_path' query param, if one was given and something plausible "
         "was found — relative to artist_root, matches one of 'tracks'.",
     )
+
+
+class NavidromeExportEntry(BaseModel):
+    """One entry to write into the exported playlist — the browser's
+    current view of a :class:`PlaylistEntryResult`, after any manual
+    fixes (see ``applyManualMatch`` in ``playlists.js``), which is why
+    this is a separate model rather than reusing ``PlaylistEntryResult``
+    directly: the server has no other record of those fixes."""
+
+    original_path: str
+    extinf: str | None = None
+    resolved_path: str | None = Field(
+        default=None,
+        description="Path relative to artist_root, or null if unmatched — "
+        "unmatched entries are written as a '# UNMATCHED:' comment.",
+    )
+
+
+class NavidromeExportRequest(BaseModel):
+    """Request body for ``POST /playlist/export-navidrome``."""
+
+    filename: str = Field(description="Only the basename is used — writing "
+        "the output stays confined to the configured Navidrome playlist folder.")
+    entries: list[NavidromeExportEntry] = Field(default_factory=list)
+
+
+class NavidromeExportResult(BaseModel):
+    """Response from ``POST /playlist/export-navidrome``."""
+
+    path: str = Field(description="Absolute path (as this container sees it) written to.")
+    total: int
+    written: int = Field(description="Matched entries actually written as track lines.")

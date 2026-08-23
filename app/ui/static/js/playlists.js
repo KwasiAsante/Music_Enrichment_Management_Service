@@ -1,9 +1,11 @@
 /**
  * Playlists page — POST /api/v1/playlist/convert with the uploaded file,
- * render the per-entry results, and hand the converted playlist back to
- * the browser as a download. Nothing is persisted server-side (see that
- * endpoint's docstring), so the download itself is built client-side from
- * the response body — there's no server path to link to.
+ * render the per-entry results, and either hand the converted playlist
+ * back to the browser as a download (built client-side from the response
+ * body — see rebuildPlaylistText) or export it to a configured Navidrome
+ * playlist folder via POST /api/v1/playlist/export-navidrome, which
+ * writes it server-side using the browser's current entry state (so
+ * manual fixes are reflected without a second convert round trip).
  *
  * Manual matching: any row's "Fix" button opens an inline panel to search
  * for an album (GET /library/albums?q=, reused as-is — it's already a
@@ -26,6 +28,7 @@ const ALBUM_SEARCH_DEBOUNCE_MS = 350;
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('convert-form')?.addEventListener('submit', handleConvertSubmit);
   document.getElementById('download-btn')?.addEventListener('click', handleDownload);
+  document.getElementById('export-navidrome-btn')?.addEventListener('click', handleExportNavidrome);
 });
 
 const METHOD_BADGE = {
@@ -50,6 +53,7 @@ async function handleConvertSubmit(e) {
   submitBtn.textContent = 'Converting…';
   resultEl.innerHTML = '';
   downloadBtn.style.display = 'none';
+  document.getElementById('export-navidrome-btn').style.display = 'none';
   document.getElementById('entries-section').style.display = 'none';
 
   const formData = new FormData();
@@ -66,6 +70,7 @@ async function handleConvertSubmit(e) {
     renderSummary();
     renderEntries();
     downloadBtn.style.display = data.total > 0 ? '' : 'none';
+    document.getElementById('export-navidrome-btn').style.display = data.total > 0 ? '' : 'none';
   } catch (err) {
     resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
   } finally {
@@ -271,6 +276,43 @@ function handleDownload() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ── Export to Navidrome (written server-side, current entry state) ──────
+async function handleExportNavidrome() {
+  if (!lastResult) return;
+  const btn = document.getElementById('export-navidrome-btn');
+  const resultEl = document.getElementById('convert-result');
+  const originalLabel = btn.textContent;
+
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+
+  try {
+    const res = await fetch('/api/v1/playlist/export-navidrome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: lastResult.filename,
+        entries: lastResult.entries.map((e) => ({
+          original_path: e.original_path,
+          extinf: e.extinf,
+          resolved_path: e.resolved_path,
+        })),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `export failed (HTTP ${res.status})`);
+
+    resultEl.insertAdjacentHTML('beforeend',
+      ` <span class="badge badge-green">exported</span> <span>${escapeHtml(data.path)}</span>`);
+  } catch (err) {
+    resultEl.insertAdjacentHTML('beforeend',
+      ` <span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
 }
 
 function escapeHtml(str) {

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
+
 
 def _touch(root: Path, *parts: str) -> Path:
     p = root.joinpath(*parts)
@@ -178,3 +180,143 @@ def test_album_tracks_missing_folder_is_empty_list(client: TestClient, auth, iso
     )
     assert r.status_code == 200
     assert r.json()["tracks"] == []
+
+
+# ── POST /playlist/export-navidrome ──────────────────────────────────────────
+
+def test_export_navidrome_rejects_when_unconfigured(client: TestClient, auth, isolated_env):
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={"filename": "old.m3u", "entries": []},
+        auth=auth,
+    )
+    assert r.status_code == 400
+    assert "not configured" in r.json()["detail"]
+
+
+def test_export_navidrome_rejects_unsupported_extension(
+    client: TestClient, auth, isolated_env, monkeypatch,
+):
+    monkeypatch.setattr(settings, "navidrome_playlist_dir", str(isolated_env.music_dir / "Playlists"))
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={"filename": "old.pls", "entries": []},
+        auth=auth,
+    )
+    assert r.status_code == 400
+    assert "unsupported playlist format" in r.json()["detail"]
+
+
+def test_export_navidrome_writes_navidrome_mount_paths_and_creates_dir(
+    client: TestClient, auth, isolated_env, monkeypatch,
+):
+    root = _artist_root(isolated_env)
+    _touch(root, "Artist A", "Album 1", "01 - Song.flac")
+
+    playlist_dir = isolated_env.music_dir / "synced_music" / "Playlists"
+    monkeypatch.setattr(settings, "navidrome_playlist_dir", str(playlist_dir))
+    assert not playlist_dir.exists()
+
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={
+            "filename": "old.m3u",
+            "entries": [
+                {
+                    "original_path": "/old/Song.flac",
+                    "extinf": "#EXTINF:100,Artist A - Song",
+                    "resolved_path": "Artist A/Album 1/01 - Song.flac",
+                },
+                {"original_path": "/old/Gone.flac", "extinf": None, "resolved_path": None},
+            ],
+        },
+        auth=auth,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 2
+    assert data["written"] == 1
+    assert data["path"] == str(playlist_dir / "old.m3u")
+
+    # Default navidrome_music_path_prefix is "/music" — the entry is
+    # written as Navidrome's own container-absolute path, not a path
+    # relative to the playlist file (confirmed necessary against a real
+    # instance — see app.core.playlist_converter.navidrome_absolute_path).
+    written = (playlist_dir / "old.m3u").read_text()
+    assert written.splitlines() == [
+        "#EXTM3U",
+        "#EXTINF:100,Artist A - Song",
+        "/music/Artist/Artist A/Album 1/01 - Song.flac",
+        "# UNMATCHED: /old/Gone.flac",
+    ]
+
+
+def test_export_navidrome_uses_custom_music_path_prefix(
+    client: TestClient, auth, isolated_env, monkeypatch,
+):
+    root = _artist_root(isolated_env)
+    _touch(root, "Artist A", "Album 1", "01 - Song.flac")
+
+    playlist_dir = isolated_env.music_dir / "synced_music" / "Playlists"
+    monkeypatch.setattr(settings, "navidrome_playlist_dir", str(playlist_dir))
+    monkeypatch.setattr(settings, "navidrome_music_path_prefix", "/data/music")
+
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={
+            "filename": "old.m3u",
+            "entries": [
+                {"original_path": "/old/Song.flac", "extinf": None,
+                 "resolved_path": "Artist A/Album 1/01 - Song.flac"},
+            ],
+        },
+        auth=auth,
+    )
+    assert r.status_code == 200
+    written = (playlist_dir / "old.m3u").read_text()
+    assert "/data/music/Artist/Artist A/Album 1/01 - Song.flac" in written
+
+
+def test_export_navidrome_resolves_relative_dir_against_app_music_dir(
+    client: TestClient, auth, isolated_env, monkeypatch,
+):
+    # Regression: navidrome_playlist_dir must track app_music_dir rather
+    # than being a fixed absolute path, so the same setting value works
+    # whether app_music_dir is the Docker container's /music or a
+    # different override in a local debug config.
+    root = _artist_root(isolated_env)
+    _touch(root, "Artist A", "Album 1", "01 - Song.flac")
+
+    monkeypatch.setattr(settings, "navidrome_playlist_dir", "synced_music/Playlists")
+
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={
+            "filename": "old.m3u",
+            "entries": [
+                {"original_path": "/old/Song.flac", "extinf": None,
+                 "resolved_path": "Artist A/Album 1/01 - Song.flac"},
+            ],
+        },
+        auth=auth,
+    )
+    assert r.status_code == 200
+    expected_dir = isolated_env.music_dir / "synced_music" / "Playlists"
+    assert r.json()["path"] == str(expected_dir / "old.m3u")
+    assert (expected_dir / "old.m3u").exists()
+
+
+def test_export_navidrome_ignores_path_components_in_filename(
+    client: TestClient, auth, isolated_env, monkeypatch,
+):
+    playlist_dir = isolated_env.music_dir / "synced_music" / "Playlists"
+    monkeypatch.setattr(settings, "navidrome_playlist_dir", str(playlist_dir))
+
+    r = client.post(
+        "/api/v1/playlist/export-navidrome",
+        json={"filename": "../../etc/evil.m3u", "entries": []},
+        auth=auth,
+    )
+    assert r.status_code == 200
+    assert r.json()["path"] == str(playlist_dir / "evil.m3u")
+    assert (playlist_dir / "evil.m3u").exists()

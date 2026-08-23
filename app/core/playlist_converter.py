@@ -417,6 +417,17 @@ def default_artist_root() -> Path:
     return settings.app_music_dir / "synced_music" / "Artist"
 
 
+def default_navidrome_music_root() -> Path:
+    """The folder, as *this* container sees it, that corresponds to
+    Navidrome's own music-folder mount (``default_artist_root()``'s
+    parent) — Navidrome typically mounts that same host folder at a
+    different container path (e.g. its ``/music`` vs. this app's
+    ``/music/synced_music``), so entries written into an exported
+    playlist need to be re-rooted at Navidrome's own mount point (see
+    :func:`navidrome_absolute_path`), not this container's."""
+    return default_artist_root().parent
+
+
 def list_album_tracks(album_dir: Path) -> list[Path]:
     """Every audio file under ``album_dir``, at any depth — multi-disc
     albums in this library keep tracks under a "Disc 1"/"Disc 2"
@@ -524,3 +535,59 @@ def convert(
         matched=matched,
         unmatched=len(entries) - matched,
     )
+
+
+def navidrome_absolute_path(
+    resolved_path: str, *, artist_root: Path, navidrome_music_root: Path, music_prefix: str,
+) -> str:
+    """``resolved_path`` (relative to ``artist_root``, as stored on
+    :class:`PlaylistEntry`) turned into an absolute path as *Navidrome's*
+    container sees it: ``music_prefix`` (its own music-folder mount
+    point, e.g. ``/music``) plus the path relative to
+    ``navidrome_music_root`` (this container's equivalent of that same
+    mount — see :func:`default_navidrome_music_root`), POSIX-separated.
+
+    A path relative to the playlist file itself was tried first — no
+    dependency on knowing Navidrome's mount config sounded more robust —
+    but confirmed against a real instance to not be read correctly by
+    its importer. Its own auto-generated playlists, and the entries it
+    actually resolves, use this mount-rooted absolute form, so this
+    matches that observed behavior rather than the theoretically cleaner
+    one.
+    """
+    absolute = artist_root / resolved_path
+    rel_to_navidrome_root = absolute.relative_to(navidrome_music_root)
+    return f"{music_prefix.rstrip('/')}/{rel_to_navidrome_root.as_posix()}"
+
+
+def build_navidrome_playlist_text(
+    entries: list,
+    *,
+    artist_root: Path,
+    navidrome_music_root: Path,
+    music_prefix: str,
+) -> str:
+    """Rebuild M3U8 text for export, from ``entries`` objects exposing
+    ``original_path``/``extinf``/``resolved_path`` (matches both
+    :class:`PlaylistEntry` and the API's ``NavidromeExportEntry`` request
+    model) — the caller passes the *client's* current entry state rather
+    than a fresh :class:`ConversionResult`, since a person may have
+    manually fixed entries client-side after the original ``convert()``
+    call (see ``app/ui/static/js/playlists.js``).
+
+    An unmatched entry (``resolved_path`` is ``None``) is written as a
+    ``# UNMATCHED:`` comment, same convention as the browser-download
+    path, rather than silently dropped.
+    """
+    lines = ["#EXTM3U"]
+    for entry in entries:
+        if entry.resolved_path is None:
+            lines.append(f"# UNMATCHED: {entry.original_path}")
+            continue
+        if entry.extinf:
+            lines.append(entry.extinf)
+        lines.append(navidrome_absolute_path(
+            entry.resolved_path, artist_root=artist_root,
+            navidrome_music_root=navidrome_music_root, music_prefix=music_prefix,
+        ))
+    return "\n".join(lines) + "\n"

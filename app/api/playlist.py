@@ -2,7 +2,7 @@
 library layout, with a manual fallback for entries the automatic pass
 can't place.
 
-Two endpoints:
+Three endpoints:
 
 * ``POST /convert`` — upload a ``.m3u``/``.m3u8`` file exported before a
   re-tagging/re-organizing run, get back the same playlist with every
@@ -21,6 +21,17 @@ Two endpoints:
   folder), then this lists that album's actual audio files plus a
   best-effort suggestion, so picking the right one is usually one click,
   not a manual browse.
+* ``POST /export-navidrome`` — write a converted (and possibly manually
+  fixed) playlist straight to ``settings.navidrome_playlist_dir``, with
+  entries written as absolute paths rooted at Navidrome's own music-mount
+  point (``settings.navidrome_music_path_prefix``) rather than this
+  container's, so a Navidrome instance sharing the same host music folder
+  (mounted at a different container path — see
+  ``app.core.playlist_converter.navidrome_absolute_path``) can resolve
+  every entry and auto-import it (Navidrome's own
+  ``ND_PLAYLISTSPATH``/``ND_AUTOIMPORTPLAYLISTS`` config). Takes the
+  browser's current entry state rather than re-running ``convert()``, so
+  manual fixes made after the initial convert are reflected.
 """
 
 from __future__ import annotations
@@ -30,16 +41,21 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
+from app.config import settings
 from app.core.playlist_converter import (
     SUPPORTED_SUFFIXES,
+    build_navidrome_playlist_text,
     convert,
     default_artist_root,
+    default_navidrome_music_root,
     list_album_tracks,
     resolve_within_album,
 )
 from app.models.playlist import (
     AlbumTrack,
     AlbumTracksResult,
+    NavidromeExportRequest,
+    NavidromeExportResult,
     PlaylistConvertResult,
     PlaylistEntryResult,
 )
@@ -162,3 +178,47 @@ def album_tracks(
                 suggested_path = match.relative_to(artist_root).as_posix()
 
     return AlbumTracksResult(folder=folder, tracks=tracks, suggested_path=suggested_path)
+
+
+# ── POST /playlist/export-navidrome ─────────────────────────────────────────
+@router.post("/export-navidrome", response_model=NavidromeExportResult)
+def export_navidrome(payload: NavidromeExportRequest) -> NavidromeExportResult:
+    """Write ``payload.entries`` to ``settings.navidrome_playlist_dir`` as
+    an M3U8 file Navidrome can resolve and auto-import. See the module
+    docstring for why this takes the browser's current entry state
+    instead of re-running ``convert()``.
+    """
+    playlist_dir = settings.navidrome_playlist_path
+    if playlist_dir is None:
+        raise HTTPException(
+            400,
+            "Navidrome playlist folder not configured — set "
+            "'Navidrome Playlist Folder' in Settings first.",
+        )
+
+    filename = Path(payload.filename).name
+    if Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES:
+        raise HTTPException(
+            400, f"unsupported playlist format — expected one of {sorted(SUPPORTED_SUFFIXES)}",
+        )
+
+    artist_root = default_artist_root()
+    playlist_dir.mkdir(parents=True, exist_ok=True)
+
+    text = build_navidrome_playlist_text(
+        payload.entries,
+        artist_root=artist_root,
+        navidrome_music_root=default_navidrome_music_root(),
+        music_prefix=settings.navidrome_music_path_prefix,
+    )
+    out_path = playlist_dir / filename
+    out_path.write_text(text, encoding="utf-8")
+
+    written = sum(1 for e in payload.entries if e.resolved_path is not None)
+    log.info("exported playlist to Navidrome folder: %s (%d/%d written)", out_path, written, len(payload.entries))
+    db.add_activity(
+        "playlist", f"exported {filename} to Navidrome playlist folder ({written}/{len(payload.entries)} matched)",
+        level="info",
+    )
+
+    return NavidromeExportResult(path=str(out_path), total=len(payload.entries), written=written)
