@@ -106,6 +106,8 @@ def _filtered_entries(
     enriched: bool,
     source: str | None,
     q: str | None = None,
+    media_type: str | None = None,
+    franchise: str | None = None,
 ) -> list[AlbumEntry]:
     """Shared filter/build logic behind both ``/albums`` and
     ``/albums/grouped`` — one place for the filtering policy so the two
@@ -129,6 +131,8 @@ def _filtered_entries(
     artist_q = artist.lower() if artist else None
     folder_q = folder.lower() if folder else None
     free_q = q.lower() if q else None
+    media_type_q = media_type.lower() if media_type else None
+    franchise_q = franchise.lower() if franchise else None
 
     entries: list[AlbumEntry] = []
     for folder_name, info in album_list.items():
@@ -158,6 +162,10 @@ def _filtered_entries(
             continue
         if not _matches_source(mapping_source, source):
             continue
+        if media_type_q and media_type_q not in (info.get("media_type") or "").lower():
+            continue
+        if franchise_q and franchise_q not in (info.get("franchise") or "").lower():
+            continue
 
         entries.append(
             AlbumEntry(
@@ -169,6 +177,8 @@ def _filtered_entries(
                 mapped=mapped,
                 enriched=is_enriched,
                 mapping_source=mapping_source,
+                media_type=info.get("media_type"),
+                franchise=info.get("franchise"),
             )
         )
 
@@ -257,6 +267,16 @@ def list_albums(
         "page's single search box. Combines (AND) with artist/folder "
         "when both are given.",
     ),
+    media_type: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the cached "
+        "media_type tag, e.g. 'video-game', 'anime'.",
+    ),
+    franchise: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the cached "
+        "franchise tag, e.g. 'Devil May Cry'.",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> AlbumsPage:
@@ -270,6 +290,7 @@ def list_albums(
     entries = _filtered_entries(
         artist=artist, folder=folder, unmapped=unmapped,
         enriched=enriched, source=source, q=q,
+        media_type=media_type, franchise=franchise,
     )
 
     total = len(entries)
@@ -297,6 +318,16 @@ def list_albums_grouped(
         default=None,
         description="Filter by mapping source: 'manual', 'import', or 'auto'.",
     ),
+    media_type: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the cached "
+        "media_type tag, e.g. 'video-game', 'anime'.",
+    ),
+    franchise: str | None = Query(
+        default=None,
+        description="Case-insensitive substring match on the cached "
+        "franchise tag, e.g. 'Devil May Cry'.",
+    ),
 ) -> GroupedAlbumsPage:
     """Every matching album, bucketed by artist — the "group by artist"
     view. Not paginated (grouping across pages would split artists across
@@ -306,6 +337,7 @@ def list_albums_grouped(
     entries = _filtered_entries(
         artist=artist, folder=folder, unmapped=unmapped,
         enriched=enriched, source=source,
+        media_type=media_type, franchise=franchise,
     )
     total = len(entries)
     truncated = total > GROUPED_ALBUMS_CAP

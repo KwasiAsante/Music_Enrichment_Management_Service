@@ -300,6 +300,16 @@ class BeetsEnricher:
 
         # ── success path ────────────────────────────────────────────────
         tags_fixed = self._fix_non_latin_artist_tags(album_folder, artist)
+
+        # Auto-fill media_type/franchise from VGMDB before applying any
+        # saved manual overrides, so a person's pinned correction (applied
+        # right after) always wins over this best-effort guess.
+        # get_album() returns None on any failure rather than raising.
+        vgmdb_data = self.mapper.vgmdb.get_album(vgmdb_id)
+        self.field_overrides.auto_fill_media_classification(
+            album_folder, override_folder_key, vgmdb_data,
+        )
+
         fields_overridden = self.field_overrides.apply_overrides(album_folder, override_folder_key)
         fields_locked = self.tag_locks.restore(album_folder, locked_snapshot)
         if mb_release_id:

@@ -62,6 +62,30 @@ def test_unmapped_filter_has_no_mapping_source(client: TestClient, auth, isolate
     assert data["albums"][0]["mapping_source"] is None
 
 
+def test_media_type_filter(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+    store.album_list.write({
+        "A": {"artist": "Artist A", "album": "First OST", "mb_release_id": "", "folder": "Artist A/First OST",
+              "media_type": "video-game", "franchise": "Devil May Cry"},
+        "B": {"artist": "Artist B", "album": "Second OST", "mb_release_id": "", "folder": "Artist B/Second OST",
+              "media_type": "anime", "franchise": "Re:Creators"},
+    })
+    r = client.get("/api/v1/library/albums", params={"media_type": "video-game"}, auth=auth)
+    assert {a["folder"] for a in r.json()["albums"]} == {"Artist A/First OST"}
+
+
+def test_franchise_filter(client: TestClient, auth, isolated_env):
+    from app.storage.json_store import store
+    store.album_list.write({
+        "A": {"artist": "Artist A", "album": "First OST", "mb_release_id": "", "folder": "Artist A/First OST",
+              "media_type": "video-game", "franchise": "Devil May Cry"},
+        "B": {"artist": "Artist B", "album": "Second OST", "mb_release_id": "", "folder": "Artist B/Second OST",
+              "media_type": "anime", "franchise": "Re:Creators"},
+    })
+    r = client.get("/api/v1/library/albums", params={"franchise": "creators"}, auth=auth)
+    assert {a["folder"] for a in r.json()["albums"]} == {"Artist B/Second OST"}
+
+
 def test_grouped_view_buckets_by_artist(client: TestClient, auth, isolated_env):
     from app.storage.json_store import store
     _seed_albums(store)

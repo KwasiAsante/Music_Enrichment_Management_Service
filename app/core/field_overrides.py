@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
+from mutagen.easyid3 import EasyID3  # type: ignore[import-untyped]
 
 from app.config import settings
 from app.core.vgmdb_client import VGMDBClient
@@ -38,6 +39,13 @@ from app.storage.json_store import store
 log = logging.getLogger("music-lib-helper.field_overrides")
 
 AUDIO_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
+
+# "media_type" and "franchise" aren't in EasyID3's default key table (unlike
+# e.g. "catalognumber", which mutagen registers to TXXX:CATALOGNUMBER out of
+# the box) — register them the same way so MP3 files can carry these tags
+# too, not just FLAC/Vorbis (which accepts arbitrary comment keys already).
+EasyID3.RegisterTXXXKey("media_type", "MEDIA_TYPE")
+EasyID3.RegisterTXXXKey("franchise", "FRANCHISE")
 
 _LANG_PRIORITY = ("en", "ja-latn", "ja")
 _LANG_LABELS = {"en": "English", "ja-latn": "Romaji", "ja": "Japanese"}
@@ -61,16 +69,37 @@ ARTIST_TAG_KEYS: tuple[str, ...] = (
 # is caught and skipped per-key in apply_overrides() below, so listing
 # extra candidate keys per field is always safe.
 FIELD_TAG_KEYS: dict[str, tuple[str, ...]] = {
-    "artist":    ARTIST_TAG_KEYS,
-    "composer":  ("composer",),
-    "performer": ("performer",),
-    "arranger":  ("arranger",),
-    "lyricist":  ("lyricist",),
-    "genre":     ("genre",),
-    "label":     ("organization",),
-    "catalog":   ("catalognumber",),
+    "artist":      ARTIST_TAG_KEYS,
+    "composer":    ("composer",),
+    "performer":   ("performer",),
+    "arranger":    ("arranger",),
+    "lyricist":    ("lyricist",),
+    "genre":       ("genre",),
+    "label":       ("organization",),
+    "catalog":     ("catalognumber",),
+    "media_type":  ("media_type",),
+    "franchise":   ("franchise",),
 }
 OVERRIDE_FIELDS: tuple[str, ...] = tuple(FIELD_TAG_KEYS.keys())
+
+# Renames the two most common VGMDB categories to the nicer labels used
+# elsewhere in the app; any other category (Drama, Tokusatsu, Live Action,
+# Publication, Doujin/Indie, ...) is slugified through rather than dropped,
+# so a soundtrack type nobody's tagged yet still gets a usable, filterable
+# media_type instead of silently getting no value at all.
+_MEDIA_TYPE_RENAME = {"game": "video-game", "animation": "anime"}
+_SLUG_RE = re.compile(r"[\s/]+")
+
+
+def _normalize_media_type(category: Any) -> str | None:
+    cats = _split_list(category)
+    if not cats:
+        return None
+    first = cats[0].strip().lower()
+    if first in _MEDIA_TYPE_RENAME:
+        return _MEDIA_TYPE_RENAME[first]
+    slug = _SLUG_RE.sub("-", first).strip("-")
+    return slug or None
 
 # Which VGMDB credit-role lists feed candidate values for which field —
 # "artist" draws from all three, since any of them might be the person
@@ -155,14 +184,16 @@ class FieldOverrideService:
                 return None
 
             return {
-                "artist":    first(*ARTIST_TAG_KEYS),
-                "composer":  first("composer"),
-                "performer": first("performer"),
-                "arranger":  first("arranger"),
-                "lyricist":  first("lyricist"),
-                "genre":     first("genre"),
-                "label":     first("organization"),
-                "catalog":   first("catalognumber"),
+                "artist":     first(*ARTIST_TAG_KEYS),
+                "composer":   first("composer"),
+                "performer":  first("performer"),
+                "arranger":   first("arranger"),
+                "lyricist":   first("lyricist"),
+                "genre":      first("genre"),
+                "label":      first("organization"),
+                "catalog":    first("catalognumber"),
+                "media_type": first("media_type"),
+                "franchise":  first("franchise"),
             }
         return {}
 
@@ -265,6 +296,13 @@ class FieldOverrideService:
         if field == "catalog":
             add(vgmdb_data.get("catalog"), "VGMDB catalog")
 
+        if field == "media_type":
+            add(_normalize_media_type(vgmdb_data.get("category")), "VGMDB category")
+
+        if field == "franchise":
+            for product in vgmdb_data.get("products") or []:
+                add(_pick_lang(product.get("names") or {}), "VGMDB product")
+
         return out
 
     # ── write side (CRUD) ────────────────────────────────────────────────
@@ -319,19 +357,16 @@ class FieldOverrideService:
         return True
 
     # ── apply (write side, called post beet-import) ─────────────────────
-    def apply_overrides(self, album_folder: Path, folder: str) -> int:
-        """Write every saved override for ``folder`` into the audio
-        files' tags. Returns the number of files modified.
+    def _write_fields(self, album_folder: Path, fields: dict[str, str]) -> int:
+        """Write ``fields`` (field name -> value) into every audio file's
+        tags under ``album_folder``. Returns the number of files modified.
 
         Best-effort and per-file/per-key, same convention as
         ``BeetsEnricher._fix_non_latin_artist_tags``: a tag key a given
         format doesn't support (e.g. ``composer`` on an M4A's restricted
         easy-tag set) is skipped for that file rather than failing the
-        whole album. A no-op (returns 0) when nothing is saved for this
-        folder.
+        whole album.
         """
-        entry = store.field_overrides.read().get(folder)
-        fields = entry.get("fields") if entry else None
         if not fields:
             return 0
 
@@ -357,6 +392,18 @@ class FieldOverrideService:
             except Exception as exc:  # noqa: BLE001
                 log.debug("override apply failed for %s: %s", audio_path, exc)
 
+        return fixed
+
+    def apply_overrides(self, album_folder: Path, folder: str) -> int:
+        """Write every saved override for ``folder`` into the audio
+        files' tags. Returns the number of files modified. A no-op
+        (returns 0) when nothing is saved for this folder."""
+        entry = store.field_overrides.read().get(folder)
+        fields = entry.get("fields") if entry else None
+        if not fields:
+            return 0
+
+        fixed = self._write_fields(album_folder, fields)
         if fixed:
             log.info("applied field overrides to %d file(s) in %s: %s",
                       fixed, album_folder, list(fields.keys()))
@@ -463,3 +510,45 @@ class FieldOverrideService:
             "total_after":     len(new_overrides),
             "dry_run":         dry_run,
         }
+
+    def auto_fill_media_classification(
+        self, album_folder: Path, folder: str, vgmdb_data: dict | None,
+    ) -> int:
+        """Auto-compute ``media_type`` (from VGMDB ``category``) and
+        ``franchise`` (from VGMDB ``products``) and write them into the
+        audio files' tags. Returns the number of files modified.
+
+        Skips any field that already has a saved manual override for
+        this folder — a person's correction, once pinned, is never
+        silently clobbered by re-enrichment's best guess. Also skips a
+        field with no computed value at all, so it never overwrites an
+        existing tag with blank. Call this *before*
+        :meth:`apply_overrides` in the enrichment flow so a manual
+        override (applied after) always wins over this auto-guess.
+        """
+        if not vgmdb_data:
+            return 0
+
+        saved = store.field_overrides.read().get(folder, {}).get("fields", {})
+
+        computed: dict[str, str] = {}
+        if "media_type" not in saved:
+            media_type = _normalize_media_type(vgmdb_data.get("category"))
+            if media_type:
+                computed["media_type"] = media_type
+        if "franchise" not in saved:
+            seen: set[str] = set()
+            names: list[str] = []
+            for product in vgmdb_data.get("products") or []:
+                name = _pick_lang(product.get("names") or {})
+                if name and name.lower() not in seen:
+                    seen.add(name.lower())
+                    names.append(name)
+            if names:
+                computed["franchise"] = "; ".join(names)
+
+        fixed = self._write_fields(album_folder, computed)
+        if fixed:
+            log.info("auto-filled media classification for %d file(s) in %s: %s",
+                      fixed, album_folder, computed)
+        return fixed

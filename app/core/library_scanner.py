@@ -35,6 +35,10 @@ from typing import Any
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 
 from app.config import settings
+# Importing this registers the "media_type"/"franchise" custom EasyID3 TXXX
+# keys (see field_overrides.py) — needed before _get_tags() below can read
+# them off an MP3's easy-tag interface.
+from app.core import field_overrides as _field_overrides  # noqa: F401
 from app.storage.json_store import store
 
 log = logging.getLogger("music-lib-helper.scanner")
@@ -254,6 +258,8 @@ class LibraryScanner:
                     "album": album_name,
                     "mb_release_id": mb_id,
                     "folder": str(album_folder.relative_to(self.artist_root)),
+                    "media_type": _first(tags.get("media_type"), "") or None,
+                    "franchise": _first(tags.get("franchise"), "") or None,
                 }
                 albums[folder_name] = entry
 
