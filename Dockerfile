@@ -21,6 +21,7 @@ RUN apt-get update \
         ffmpeg \
         git \
         tini \
+        gosu \
         ca-certificates \
         curl \
     && rm -rf /var/lib/apt/lists/*
@@ -66,9 +67,15 @@ COPY lidarr-scripts/ ./lidarr-scripts/
 # ── Runtime data directory ───────────────────────────────────────────────────
 RUN mkdir -p ${APP_DATA_DIR}
 
+# ── Entrypoint (PUID/PGID support) ──────────────────────────────────────────
+# Defaults to running as root (PUID=0/PGID=0, i.e. unset) for backward
+# compatibility; set PUID/PGID in .env to run as a real host user instead.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8900
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 # app.main:asgi_app, not app.main:app — asgi_app is `app` itself when
 # URL_BASE is unset (the default), or `app` wrapped under that prefix
 # when it's set. See app/main.py.

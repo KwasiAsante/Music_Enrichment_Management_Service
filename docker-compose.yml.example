@@ -19,6 +19,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Run as this host uid:gid instead of root (`id -u`/`id -g` on the
+      # host owning HOST_MUSIC_DIR). Unset in .env => both default to 0
+      # (root), matching pre-PUID/PGID behavior.
+      - PUID=${PUID:-0}
+      - PGID=${PGID:-0}
     ports:
       - "${APP_PORT:-8900}:8900"
     volumes:
