@@ -53,6 +53,7 @@ from app.core.library_scanner import LibraryScanner
 from app.core.mb_client import MBClient
 from app.core.mb_link import MBLinkChecker
 from app.core.notifier import Category, Notifier
+from app.core.tag_locks import TagLockService
 from app.core.vgmdb_mapper import VGMDBMapper
 from app.storage import db
 from app.storage.json_store import store
@@ -151,6 +152,7 @@ class BeetsEnricher:
         mb_link: MBLinkChecker | None = None,
         scanner: LibraryScanner | None = None,
         field_overrides: FieldOverrideService | None = None,
+        tag_locks: TagLockService | None = None,
     ) -> None:
         self.mb = mb or MBClient()
         self.mapper = mapper or VGMDBMapper()
@@ -158,6 +160,7 @@ class BeetsEnricher:
         self.mb_link = mb_link or MBLinkChecker()
         self.scanner = scanner or LibraryScanner()
         self.field_overrides = field_overrides or FieldOverrideService()
+        self.tag_locks = tag_locks or TagLockService()
         self.artist_root: Path = settings.artist_root
 
     # ── public: per-album entry point ───────────────────────────────────
@@ -252,6 +255,7 @@ class BeetsEnricher:
             }
 
         # ── beet remove + import ────────────────────────────────────────
+        locked_snapshot = self.tag_locks.snapshot(album_folder, override_folder_key)
         self._beet_remove(album_folder, vgmdb_id=vgmdb_id)
         ok, raw_output = self._beet_import(album_folder, vgmdb_id)
         output = strip_ansi(raw_output)
@@ -297,6 +301,7 @@ class BeetsEnricher:
         # ── success path ────────────────────────────────────────────────
         tags_fixed = self._fix_non_latin_artist_tags(album_folder, artist)
         fields_overridden = self.field_overrides.apply_overrides(album_folder, override_folder_key)
+        fields_locked = self.tag_locks.restore(album_folder, locked_snapshot)
         if mb_release_id:
             enriched.add(mb_release_id)
             store.save_enriched_set(enriched)
@@ -322,7 +327,8 @@ class BeetsEnricher:
             "enrich",
             f"enriched vgmdb:{vgmdb_id} ({match_pct})"
             + (f" — fixed {tags_fixed} non-Latin tags" if tags_fixed else "")
-            + (f" — applied {fields_overridden} field override(s)" if fields_overridden else ""),
+            + (f" — applied {fields_overridden} field override(s)" if fields_overridden else "")
+            + (f" — restored {fields_locked} locked field write(s)" if fields_locked else ""),
             artist=artist, album=album,
         )
 
@@ -330,6 +336,7 @@ class BeetsEnricher:
             "ok": True, "vgmdb_id": vgmdb_id, "source": source,
             "match": match_pct, "tags_fixed": tags_fixed,
             "fields_overridden": fields_overridden,
+            "fields_locked": fields_locked,
             "seed_category": posted_to,
             "message": "enrichment complete",
             "artist": artist, "album": album, "mb_release_id": mb_release_id,

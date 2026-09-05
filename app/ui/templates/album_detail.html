@@ -17,6 +17,10 @@
   </div>
   {% if detail %}
   <div class="page-header-actions">
+    <button type="button" class="btn btn-ghost btn-sm" id="edit-tags-btn"
+            data-folder="{{ detail.folder }}">
+      ✎ Edit Tags
+    </button>
     <button type="button" class="btn btn-primary btn-sm" id="reenrich-btn"
             data-folder="{{ detail.folder }}" data-album="{{ detail.album }}">
       ⟳ Re-enrich
@@ -27,6 +31,23 @@
 </div>
 
 {% if detail %}
+<section id="tag-editor-section" style="display:none;">
+  <div class="section-label">Edit Tags</div>
+  <p class="page-sub">Changes save immediately to the audio files. 🔒 locks a field so future enrichment can never overwrite it — see the Enrich page for how re-enrich handles locked fields.</p>
+  <div id="tag-editor-warnings"></div>
+  <div id="tag-editor-fields" class="settings-fields"></div>
+  <div class="backup-row settings-row-input" style="margin-top:16px;">
+    <input type="text" id="new-tag-name" placeholder="Custom tag name..." style="max-width:200px;">
+    <input type="text" id="new-tag-value" placeholder="Value..." style="max-width:240px;">
+    <button type="button" class="btn btn-ghost btn-sm" id="add-tag-row-btn">+ Add Custom Tag</button>
+  </div>
+  <div class="backup-row" style="margin-top:10px;">
+    <button type="button" class="btn btn-success btn-sm" id="save-tags-btn">Save Tags</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="cancel-tags-btn">Cancel</button>
+  </div>
+  <div id="tag-editor-result" class="import-result"></div>
+</section>
+
 <div class="album-hero">
   <div class="album-art-panel">
     <div class="album-art-main">

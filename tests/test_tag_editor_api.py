@@ -1,0 +1,115 @@
+"""app.api.tags — /api/v1/tags/* album tag view/edit + lock CRUD."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+import app.core.tag_fields as tf
+from app.storage.json_store import store
+
+
+def _seed(isolated_env) -> None:
+    store.album_list.write({
+        "TestAlbum": {
+            "artist": "Real Band Name", "album": "Test OST",
+            "mb_release_id": "mb-1", "folder": "Real Band Name/Test OST",
+        },
+    })
+    album_dir = isolated_env.music_dir / "Artist" / "Real Band Name" / "Test OST"
+    album_dir.mkdir(parents=True)
+    (album_dir / "01.flac").touch()
+
+
+# ── GET /tags/album ──────────────────────────────────────────────────────────
+def test_get_album_tags_unknown_folder_404(client: TestClient, auth):
+    r = client.get("/api/v1/tags/album", params={"folder": "Nope/Nope"}, auth=auth)
+    assert r.status_code == 404
+
+
+def test_get_album_tags_returns_standard_and_custom_fields(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    with patch.object(tf, "read_album_fields", return_value={
+        "genre": "Rock", "MyCustomTag": "Value", "musicbrainz_albumid": "abc-123",
+    }):
+        r = client.get("/api/v1/tags/album", params={"folder": "Real Band Name/Test OST"}, auth=auth)
+
+    assert r.status_code == 200
+    data = r.json()
+    by_name = {f["name"]: f for f in data["fields"]}
+    assert by_name["genre"]["value"] == "Rock"
+    assert by_name["genre"]["source"] == "standard"
+    assert by_name["MyCustomTag"]["source"] == "custom"
+    assert by_name["musicbrainz_albumid"]["source"] == "musicbrainz"
+
+
+# ── PUT /tags/album ──────────────────────────────────────────────────────────
+def test_put_album_tags_unknown_folder_404(client: TestClient, auth):
+    r = client.put(
+        "/api/v1/tags/album", params={"folder": "Nope/Nope"},
+        json={"fields": {"genre": "Rock"}}, auth=auth,
+    )
+    assert r.status_code == 404
+
+
+def test_put_album_tags_writes_and_returns_refreshed_view(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    with patch.object(tf, "write_album_field", return_value=1):
+        r = client.put(
+            "/api/v1/tags/album", params={"folder": "Real Band Name/Test OST"},
+            json={"fields": {"genre": "Rock", "MyBrandNewTag": "Value"}}, auth=auth,
+        )
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["files_touched"] == 2
+    assert data["tags"]["folder"] == "Real Band Name/Test OST"
+
+
+def test_put_album_tags_rejects_a_per_track_field(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/album", params={"folder": "Real Band Name/Test OST"},
+        json={"fields": {"title": "New Title"}}, auth=auth,
+    )
+    assert r.status_code == 400
+
+
+# ── PUT /tags/locks ───────────────────────────────────────────────────────────
+def test_put_lock_toggles_and_persists(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "genre", "locked": True}, auth=auth,
+    )
+    assert r.status_code == 200
+    assert r.json()["locked_fields"] == ["genre"]
+
+    r = client.get("/api/v1/tags/album", params={"folder": "Real Band Name/Test OST"}, auth=auth)
+    genre_field = next(f for f in r.json()["fields"] if f["name"] == "genre")
+    assert genre_field["locked"] is True
+
+    r = client.put(
+        "/api/v1/tags/locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "genre", "locked": False}, auth=auth,
+    )
+    assert r.json()["locked_fields"] == []
+
+
+def test_put_lock_supports_a_custom_field_name(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "MyCustomTag", "locked": True}, auth=auth,
+    )
+    assert r.json()["locked_fields"] == ["MyCustomTag"]
+
+
+def test_put_lock_rejects_locking_a_per_track_field(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "title", "locked": True}, auth=auth,
+    )
+    assert r.status_code == 400

@@ -52,6 +52,12 @@ class EnrichAlbumResult(BaseModel):
         "field-override mapping (see /api/v1/overrides) — see "
         "app.core.field_overrides.",
     )
+    fields_locked: int = Field(
+        default=0,
+        description="File writes that restored a locked tag field to its "
+        "pre-enrichment value (see /api/v1/tags/locks) — see "
+        "app.core.tag_locks.",
+    )
     seed_category: str | None = Field(
         default=None,
         description="Discord category the MB seed URL was posted to, if any.",

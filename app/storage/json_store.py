@@ -12,6 +12,8 @@ the data volume (``settings.app_data_dir``):
     excluded_artists.json [artist_name, ...]  (Western acts w/ no VGMDB presence)
     field_overrides.json  {folder: {mb_release_id, artist, album,
                                      fields: {field_name: value}}}
+    locked_fields.json    {folder: [field_name, ...]}  — see
+                           app/core/tag_locks.py
 
 They stay plain JSON on purpose — the standalone CLI scripts in
 ``scripts/`` read and write the exact same files, and they're trivial to
@@ -129,6 +131,9 @@ class JsonStore:
         )
         # Per-album manual tag-field overrides — see app/core/field_overrides.py.
         self.field_overrides = JsonFile(data_dir / "field_overrides.json", {})
+        # Per-album tag fields locked against enrichment overwriting them —
+        # see app/core/tag_locks.py.
+        self.locked_fields = JsonFile(data_dir / "locked_fields.json", {})
         # artists_mbids.json is a *list* on disk (matches the format the Picard
         # export pipeline uploads to a GitHub Gist), but the exporter treats it
         # as a dict-keyed-by-Artist internally for merging.
