@@ -22,6 +22,42 @@
   </p>
 </section>
 
+<section class="backup-panel">
+  <div class="section-label">Tag Locks Backup &amp; Restore</div>
+  <div class="backup-row">
+    <a class="btn btn-ghost btn-sm" href="{{ url_base }}/api/v1/tags/locks/export" download>⇩ Export backup</a>
+
+    <form id="locks-import-form" class="import-form">
+      <input type="file" id="locks-import-file" accept="application/json" required>
+      <select id="locks-import-mode" class="cf-inline">
+        <option value="merge">Merge into existing</option>
+        <option value="replace">Replace entire set</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" type="submit">⇧ Import</button>
+    </form>
+  </div>
+  <p class="settings-help">Every per-album enrichment-lock ("locked_fields.json") — see the Enrich page's tag editor for setting one.</p>
+  <div id="locks-import-result" class="import-result"></div>
+</section>
+
+<section class="backup-panel">
+  <div class="section-label">Enriched Albums Log Backup &amp; Restore</div>
+  <div class="backup-row">
+    <a class="btn btn-ghost btn-sm" href="{{ url_base }}/api/v1/enrich/export" download>⇩ Export backup</a>
+
+    <form id="enriched-import-form" class="import-form">
+      <input type="file" id="enriched-import-file" accept="application/json" required>
+      <select id="enriched-import-mode" class="cf-inline">
+        <option value="merge">Merge into existing</option>
+        <option value="replace">Replace entire log</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" type="submit">⇧ Import</button>
+    </form>
+  </div>
+  <p class="settings-help">The set of MB release ids already run through enrichment ("enriched_albums.json") — enrichment skips anything already in this log.</p>
+  <div id="enriched-import-result" class="import-result"></div>
+</section>
+
 <div class="tip-banner settings-note">
   <span class="tip-banner-icon">ℹ</span>
   <span class="tip-banner-text">

@@ -361,3 +361,105 @@ class FieldOverrideService:
             log.info("applied field overrides to %d file(s) in %s: %s",
                       fixed, album_folder, list(fields.keys()))
         return fixed
+
+    # ── export / import (backup-restore) ────────────────────────────────
+    def export_overrides(self) -> dict[str, dict]:
+        """Return the raw ``field_overrides.json`` contents, keyed by
+        folder. The router wraps this with export metadata."""
+        return store.field_overrides.read()
+
+    def import_overrides(
+        self,
+        incoming: dict[str, Any],
+        *,
+        mode: str = "merge",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Load override entries from a previously exported (or hand-edited)
+        dict and write them into ``field_overrides.json``.
+
+        ``mode``:
+
+        * ``"merge"``   — keep every existing entry; entries present in
+          ``incoming`` are added (new folder) or overwrite the existing
+          value (same folder, different value).
+        * ``"replace"`` — the imported file becomes the entire set of
+          overrides; any existing entry not present in ``incoming`` is
+          dropped.
+
+        Rows in ``incoming`` that aren't objects, or whose ``fields``
+        contains no known override field with a non-empty value, are
+        silently skipped and counted in ``skipped_invalid`` — a
+        partially hand-edited backup shouldn't blow up the whole
+        restore. Unknown field names inside ``fields`` are dropped
+        rather than failing the row, same convention as
+        :meth:`set_overrides`'s unknown-field check, just best-effort.
+
+        With ``dry_run``, computes and returns the same stats without
+        writing ``field_overrides.json``.
+        """
+        if mode not in ("merge", "replace"):
+            raise ValueError(f"mode must be 'merge' or 'replace', got {mode!r}")
+
+        current = store.field_overrides.read()
+
+        validated: dict[str, dict] = {}
+        skipped_invalid = 0
+        for folder, entry in incoming.items():
+            if not isinstance(entry, dict):
+                skipped_invalid += 1
+                continue
+            raw_fields = entry.get("fields")
+            fields = {
+                k: str(v).strip()
+                for k, v in (raw_fields.items() if isinstance(raw_fields, dict) else [])
+                if k in OVERRIDE_FIELDS and str(v).strip()
+            }
+            if not fields:
+                skipped_invalid += 1
+                continue
+            validated[folder] = {
+                "mb_release_id": entry.get("mb_release_id") or None,
+                "artist": entry.get("artist", "") or "",
+                "album": entry.get("album", "") or "",
+                "fields": fields,
+            }
+
+        added = updated = unchanged = 0
+        for folder, entry in validated.items():
+            if folder not in current:
+                added += 1
+            elif current[folder] != entry:
+                updated += 1
+            else:
+                unchanged += 1
+
+        if mode == "replace":
+            removed = sum(1 for k in current if k not in validated)
+            new_overrides = validated
+        else:
+            removed = 0
+            new_overrides = {**current, **validated}
+
+        if not dry_run:
+            store.field_overrides.write(new_overrides)
+            log.info(
+                "field overrides import (mode=%s): +%d added, %d updated, %d removed, "
+                "%d skipped, %d total",
+                mode, added, updated, removed, skipped_invalid, len(new_overrides),
+            )
+        else:
+            log.info("field overrides import (dry run, mode=%s): would be "
+                      "+%d added, %d updated, %d removed, %d skipped",
+                      mode, added, updated, removed, skipped_invalid)
+
+        return {
+            "mode":            mode,
+            "added":           added,
+            "updated":         updated,
+            "unchanged":       unchanged,
+            "removed":         removed,
+            "skipped_invalid": skipped_invalid,
+            "total_after":     len(new_overrides),
+            "dry_run":         dry_run,
+        }

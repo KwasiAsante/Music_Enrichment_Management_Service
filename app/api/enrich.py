@@ -12,6 +12,10 @@ Four endpoints:
                                      finished bulk job.
 * ``GET  /enrich/log``              — recent activity_log rows (``enrich``
                                      category) for the Logs page.
+* ``GET  /enrich/export``           — download the enriched-albums log
+                                     (``enriched_albums.json``) as a backup file.
+* ``POST /enrich/import``           — restore/merge the enriched-albums log
+                                     from a backup file.
 
 The bulk runner deliberately uses a thin daemon-thread rather than
 FastAPI's BackgroundTasks: BackgroundTasks runs *after* the response is
@@ -22,13 +26,17 @@ enrichment block its uvicorn worker. The thread approach scales to
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Path as PathParam, Query
+from fastapi import APIRouter, File, HTTPException, Path as PathParam, Query, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.core.beets_enricher import BeetsEnricher
+from app.core.enriched_albums import EnrichedAlbumsService
 from app.core.library_scanner import LibraryScanner
 from app.models.enrich import (
     EnrichAlbumRequest,
@@ -37,6 +45,7 @@ from app.models.enrich import (
     EnrichLogEntry,
     EnrichRunRequest,
     EnrichRunStarted,
+    ImportEnrichedAlbumsResult,
 )
 from app.storage import db
 
@@ -217,6 +226,79 @@ def list_log(
 ) -> list[EnrichLogEntry]:
     rows = db.list_activity(limit=limit, category="enrich", artist=artist)
     return [EnrichLogEntry(**r) for r in rows]
+
+
+# ── GET /enrich/export ──────────────────────────────────────────────────────
+@router.get("/export")
+def export_enriched() -> JSONResponse:
+    """Download the full ``enriched_albums.json`` log as a timestamped
+    backup file — the set of MB release ids already run through
+    enrichment."""
+    enriched = EnrichedAlbumsService().export_enriched()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "exported_at": now.isoformat(),
+        "count": len(enriched),
+        "enriched_albums": enriched,
+    }
+    db.add_activity("enrich", f"exported {len(enriched)} enriched album id(s)")
+    filename = f"enriched_albums-{now:%Y%m%d-%H%M%S}.json"
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ── POST /enrich/import ─────────────────────────────────────────────────────
+@router.post("/import", response_model=ImportEnrichedAlbumsResult)
+async def import_enriched(
+    file: UploadFile = File(
+        ...,
+        description="A file from GET /enrich/export, or a raw enriched_albums.json.",
+    ),
+    mode: str = Query(
+        default="merge",
+        pattern="^(merge|replace)$",
+        description="'merge' unions the current log with the imported ids. "
+        "'replace' makes the imported file the entire log — anything not "
+        "in it is dropped.",
+    ),
+    dry_run: bool = Query(
+        default=False,
+        description="Report what would change without writing enriched_albums.json.",
+    ),
+) -> ImportEnrichedAlbumsResult:
+    """Restore (or merge in) the enriched-albums log from a previously
+    exported backup."""
+    raw = await file.read()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"not valid JSON: {exc}") from exc
+
+    if isinstance(data, dict) and isinstance(data.get("enriched_albums"), list):
+        incoming = data["enriched_albums"]
+    elif isinstance(data, list):
+        incoming = data
+    else:
+        raise HTTPException(
+            400,
+            "expected a JSON array — either an export from GET "
+            "/enrich/export, or a raw enriched_albums.json.",
+        )
+
+    try:
+        result = EnrichedAlbumsService().import_enriched(incoming, mode=mode, dry_run=dry_run)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if not dry_run:
+        db.add_activity(
+            "enrich",
+            f"imported enriched albums (mode={mode}): +{result['added']} added, "
+            f"{result['removed']} removed, {result['skipped_invalid']} skipped",
+        )
+    return ImportEnrichedAlbumsResult(**result)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────

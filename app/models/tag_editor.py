@@ -57,3 +57,24 @@ class SetLockRequest(BaseModel):
 class SetLockResult(BaseModel):
     folder: str
     locked_fields: list[str]
+
+
+# ── POST /tags/locks/import ─────────────────────────────────────────────────
+class ImportLockedFieldsResult(BaseModel):
+    """Response from ``POST /tags/locks/import``."""
+    mode:            str = Field(description="'merge' or 'replace'.")
+    added:           int = Field(description="Entries not previously present.")
+    updated:         int = Field(description="Existing entries whose field list changed.")
+    unchanged:       int = Field(description="Existing entries the import matched exactly.")
+    removed:         int = Field(
+        default=0,
+        description="Entries dropped because mode='replace' and they "
+        "weren't in the imported file. Always 0 for mode='merge'.",
+    )
+    skipped_invalid: int = Field(
+        default=0,
+        description="Rows in the imported file that weren't a list of "
+        "field names, or had none left after dropping per-track-only fields.",
+    )
+    total_after:     int = Field(description="Total locked-folder count after the import.")
+    dry_run:         bool = False

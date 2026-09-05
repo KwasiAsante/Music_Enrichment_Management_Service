@@ -34,7 +34,56 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('save-overrides-btn')?.addEventListener('click', saveOverrides);
   document.getElementById('clear-overrides-btn')?.addEventListener('click', clearOverrides);
+  document.getElementById('overrides-import-form')?.addEventListener('submit', handleImportSubmit);
 });
+
+// ── Backup & restore ─────────────────────────────────────────────────────
+async function handleImportSubmit(e) {
+  e.preventDefault();
+  const fileInput = document.getElementById('overrides-import-file');
+  const mode = document.getElementById('overrides-import-mode').value;
+  const resultEl = document.getElementById('overrides-import-result');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  if (mode === 'replace' &&
+      !confirm('This replaces every saved field override with the contents of the ' +
+               'file — any album not in it will have its overrides removed. Continue?')) {
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Importing…';
+  resultEl.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`/api/v1/overrides/import?mode=${encodeURIComponent(mode)}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `import failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML =
+      `<span class="badge badge-green">done</span> ` +
+      `<span>+${data.added} added, ${data.updated} updated` +
+      (data.mode === 'replace' ? `, ${data.removed} removed` : '') +
+      (data.skipped_invalid ? `, ${data.skipped_invalid} skipped (invalid)` : '') +
+      ` — ${data.total_after} total</span>`;
+
+    e.target.reset();
+    if (currentFolder) await openEditor(currentFolder);
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '⇧ Import';
+  }
+}
 
 // ── Search ────────────────────────────────────────────────────────────────
 async function runSearch(q) {

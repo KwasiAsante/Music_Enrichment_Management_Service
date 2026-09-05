@@ -5,6 +5,7 @@ relies on.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -111,3 +112,64 @@ def test_field_overrides_page_renders(client: TestClient, auth):
     assert r.status_code == 200
     assert 'id="search-input"' in r.text
     assert 'id="editor-section"' in r.text
+
+
+# ── export / import ──────────────────────────────────────────────────────
+def test_export_import_round_trip(client: TestClient, auth, isolated_env):
+    store.field_overrides.write({
+        "A/B": {"mb_release_id": "mb-1", "artist": "A", "album": "B",
+                "fields": {"artist": "Real Name"}},
+    })
+
+    r = client.get("/api/v1/overrides/export", auth=auth)
+    assert r.status_code == 200
+    exported = r.json()
+    assert exported["count"] == 1
+
+    files = {"file": ("backup.json", json.dumps({
+        "field_overrides": {
+            "A/B": {"artist": "A", "album": "B", "fields": {"artist": "Updated Name"}},
+            "C/D": {"artist": "C", "album": "D", "fields": {"genre": "Rock"}},
+        },
+    }), "application/json")}
+    r = client.post("/api/v1/overrides/import?mode=merge", files=files, auth=auth)
+    result = r.json()
+    assert result["added"] == 1 and result["updated"] == 1 and result["total_after"] == 2
+
+
+def test_import_replace_mode_drops_unlisted_entries(client: TestClient, auth, isolated_env):
+    store.field_overrides.write({
+        "A/B": {"artist": "A", "album": "B", "fields": {"artist": "X"}},
+        "C/D": {"artist": "C", "album": "D", "fields": {"genre": "Rock"}},
+    })
+    files = {"file": ("backup.json", json.dumps({
+        "C/D": {"artist": "C", "album": "D", "fields": {"genre": "Rock"}},
+    }), "application/json")}
+    r = client.post("/api/v1/overrides/import?mode=replace", files=files, auth=auth)
+    result = r.json()
+    assert result["removed"] == 1 and result["total_after"] == 1
+
+
+def test_import_dry_run_does_not_write(client: TestClient, auth, isolated_env):
+    before = store.field_overrides.read()
+    files = {"file": ("backup.json", json.dumps({
+        "A/B": {"artist": "A", "album": "B", "fields": {"artist": "X"}},
+    }), "application/json")}
+    client.post("/api/v1/overrides/import?mode=merge&dry_run=true", files=files, auth=auth)
+    assert store.field_overrides.read() == before
+
+
+def test_import_malformed_json_rejected(client: TestClient, auth):
+    files = {"file": ("bad.json", b"not json", "application/json")}
+    r = client.post("/api/v1/overrides/import", files=files, auth=auth)
+    assert r.status_code == 400
+
+
+def test_import_skips_invalid_rows(client: TestClient, auth):
+    files = {"file": ("mixed.json", json.dumps({
+        "good": {"artist": "A", "album": "B", "fields": {"artist": "X"}},
+        "no_known_fields": {"fields": {"bogus": "x"}},
+        "not_a_dict": "nope",
+    }), "application/json")}
+    r = client.post("/api/v1/overrides/import?mode=merge", files=files, auth=auth)
+    assert r.json()["skipped_invalid"] == 2

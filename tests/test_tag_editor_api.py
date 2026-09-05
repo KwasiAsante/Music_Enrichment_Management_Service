@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -113,3 +114,51 @@ def test_put_lock_rejects_locking_a_per_track_field(client: TestClient, auth, is
         json={"field": "title", "locked": True}, auth=auth,
     )
     assert r.status_code == 400
+
+
+# ── export / import ──────────────────────────────────────────────────────
+def test_export_import_round_trip(client: TestClient, auth, isolated_env):
+    store.locked_fields.write({"A/B": ["genre"]})
+
+    r = client.get("/api/v1/tags/locks/export", auth=auth)
+    assert r.status_code == 200
+    exported = r.json()
+    assert exported["count"] == 1
+
+    files = {"file": ("backup.json", json.dumps({
+        "locked_fields": {"A/B": ["genre", "artist"], "C/D": ["composer"]},
+    }), "application/json")}
+    r = client.post("/api/v1/tags/locks/import?mode=merge", files=files, auth=auth)
+    result = r.json()
+    assert result["added"] == 1 and result["updated"] == 1 and result["total_after"] == 2
+
+
+def test_import_replace_mode_drops_unlisted_entries(client: TestClient, auth, isolated_env):
+    store.locked_fields.write({"A/B": ["genre"], "C/D": ["composer"]})
+    files = {"file": ("backup.json", json.dumps({"C/D": ["composer"]}), "application/json")}
+    r = client.post("/api/v1/tags/locks/import?mode=replace", files=files, auth=auth)
+    result = r.json()
+    assert result["removed"] == 1 and result["total_after"] == 1
+
+
+def test_import_dry_run_does_not_write(client: TestClient, auth, isolated_env):
+    before = store.locked_fields.read()
+    files = {"file": ("backup.json", json.dumps({"A/B": ["genre"]}), "application/json")}
+    client.post("/api/v1/tags/locks/import?mode=merge&dry_run=true", files=files, auth=auth)
+    assert store.locked_fields.read() == before
+
+
+def test_import_malformed_json_rejected(client: TestClient, auth):
+    files = {"file": ("bad.json", b"not json", "application/json")}
+    r = client.post("/api/v1/tags/locks/import", files=files, auth=auth)
+    assert r.status_code == 400
+
+
+def test_import_drops_per_track_fields_and_skips_now_empty_rows(client: TestClient, auth):
+    files = {"file": ("mixed.json", json.dumps({
+        "good": ["genre"],
+        "only_per_track": ["title"],
+        "not_a_list": "nope",
+    }), "application/json")}
+    r = client.post("/api/v1/tags/locks/import?mode=merge", files=files, auth=auth)
+    assert r.json()["skipped_invalid"] == 2

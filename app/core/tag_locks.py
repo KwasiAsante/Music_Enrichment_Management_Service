@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from app.core import tag_fields
 from app.storage.json_store import store
@@ -78,3 +79,97 @@ class TagLockService:
             log.info("restored %d locked field write(s) in %s: %s",
                       applied, album_dir, list(snapshot.keys()))
         return applied
+
+    # ── export / import (backup-restore) ────────────────────────────────
+    def export_locks(self) -> dict[str, list[str]]:
+        """Return the raw ``locked_fields.json`` contents, keyed by
+        folder. The router wraps this with export metadata."""
+        return store.locked_fields.read()
+
+    def import_locks(
+        self,
+        incoming: dict[str, Any],
+        *,
+        mode: str = "merge",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Load lock entries from a previously exported (or hand-edited)
+        dict and write them into ``locked_fields.json``.
+
+        ``mode``:
+
+        * ``"merge"``   — keep every existing entry; entries present in
+          ``incoming`` are added (new folder) or overwrite the existing
+          value (same folder, different field list).
+        * ``"replace"`` — the imported file becomes the entire set of
+          locks; any existing entry not present in ``incoming`` is
+          dropped.
+
+        A row in ``incoming`` must be a list of field-name strings; a
+        per-track-only field (see ``tag_fields.PER_TRACK_ONLY_KEYS``) is
+        dropped from that list rather than failing the whole row — the
+        same rule :meth:`set_lock` enforces, just applied best-effort
+        here. Rows that aren't lists, or end up with no fields left
+        after that filter, are counted in ``skipped_invalid``.
+
+        With ``dry_run``, computes and returns the same stats without
+        writing ``locked_fields.json``.
+        """
+        if mode not in ("merge", "replace"):
+            raise ValueError(f"mode must be 'merge' or 'replace', got {mode!r}")
+
+        current = store.locked_fields.read()
+
+        validated: dict[str, list[str]] = {}
+        skipped_invalid = 0
+        for folder, fields in incoming.items():
+            if not isinstance(fields, list):
+                skipped_invalid += 1
+                continue
+            cleaned = sorted({
+                str(f).strip() for f in fields
+                if str(f).strip() and str(f).strip() not in tag_fields.PER_TRACK_ONLY_KEYS
+            })
+            if not cleaned:
+                skipped_invalid += 1
+                continue
+            validated[folder] = cleaned
+
+        added = updated = unchanged = 0
+        for folder, fields in validated.items():
+            if folder not in current:
+                added += 1
+            elif sorted(current[folder]) != fields:
+                updated += 1
+            else:
+                unchanged += 1
+
+        if mode == "replace":
+            removed = sum(1 for k in current if k not in validated)
+            new_locks = validated
+        else:
+            removed = 0
+            new_locks = {**current, **validated}
+
+        if not dry_run:
+            store.locked_fields.write(new_locks)
+            log.info(
+                "tag locks import (mode=%s): +%d added, %d updated, %d removed, "
+                "%d skipped, %d total",
+                mode, added, updated, removed, skipped_invalid, len(new_locks),
+            )
+        else:
+            log.info("tag locks import (dry run, mode=%s): would be "
+                      "+%d added, %d updated, %d removed, %d skipped",
+                      mode, added, updated, removed, skipped_invalid)
+
+        return {
+            "mode":            mode,
+            "added":           added,
+            "updated":         updated,
+            "unchanged":       unchanged,
+            "removed":         removed,
+            "skipped_invalid": skipped_invalid,
+            "total_after":     len(new_locks),
+            "dry_run":         dry_run,
+        }

@@ -113,6 +113,25 @@ class EnrichJobStatus(BaseModel):
     result: dict[str, Any] | None = None
 
 
+# ── POST /enrich/import ────────────────────────────────────────────────────
+class ImportEnrichedAlbumsResult(BaseModel):
+    """Response from ``POST /enrich/import``."""
+    mode:            str = Field(description="'merge' or 'replace'.")
+    added:           int = Field(description="MB release ids not previously present.")
+    unchanged:       int = Field(description="MB release ids already present in the log.")
+    removed:         int = Field(
+        default=0,
+        description="Ids dropped because mode='replace' and they weren't "
+        "in the imported file. Always 0 for mode='merge'.",
+    )
+    skipped_invalid: int = Field(
+        default=0,
+        description="Entries in the imported file that weren't non-empty strings.",
+    )
+    total_after:     int = Field(description="Total enriched-album count after the import.")
+    dry_run:         bool = False
+
+
 # ── GET /enrich/log ───────────────────────────────────────────────────────
 class EnrichLogEntry(BaseModel):
     """One row from the activity_log filtered to category='enrich'."""

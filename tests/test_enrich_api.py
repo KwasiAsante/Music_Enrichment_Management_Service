@@ -12,7 +12,11 @@ missing mb_release_id, and an unparseable track_paths list.
 
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
+
+from app.storage.json_store import store
 
 
 def test_test_event_is_ignored(client: TestClient, auth):
@@ -142,3 +146,55 @@ def test_enrich_log_returns_recent_entries(client: TestClient, auth, isolated_en
     r = client.get("/api/v1/enrich/log", auth=auth)
     assert r.status_code == 200
     assert any(e["message"] == "test enrichment happened" for e in r.json())
+
+
+# ── export / import ──────────────────────────────────────────────────────
+def test_export_import_round_trip(client: TestClient, auth, isolated_env):
+    store.save_enriched_set({"mb-rel-1"})
+
+    r = client.get("/api/v1/enrich/export", auth=auth)
+    assert r.status_code == 200
+    exported = r.json()
+    assert exported["count"] == 1
+
+    files = {"file": ("backup.json", json.dumps({
+        "enriched_albums": ["mb-rel-1", "mb-rel-2"],
+    }), "application/json")}
+    r = client.post("/api/v1/enrich/import?mode=merge", files=files, auth=auth)
+    result = r.json()
+    assert result["added"] == 1 and result["unchanged"] == 1 and result["total_after"] == 2
+
+
+def test_import_accepts_a_bare_list(client: TestClient, auth, isolated_env):
+    files = {"file": ("backup.json", json.dumps(["mb-rel-1", "mb-rel-2"]), "application/json")}
+    r = client.post("/api/v1/enrich/import?mode=merge", files=files, auth=auth)
+    assert r.json()["total_after"] == 2
+
+
+def test_import_replace_mode_drops_unlisted_entries(client: TestClient, auth, isolated_env):
+    store.save_enriched_set({"mb-rel-1", "mb-rel-2"})
+    files = {"file": ("backup.json", json.dumps({"enriched_albums": ["mb-rel-2"]}), "application/json")}
+    r = client.post("/api/v1/enrich/import?mode=replace", files=files, auth=auth)
+    result = r.json()
+    assert result["removed"] == 1 and result["total_after"] == 1
+
+
+def test_import_dry_run_does_not_write(client: TestClient, auth, isolated_env):
+    before = store.enriched_albums.read()
+    files = {"file": ("backup.json", json.dumps({"enriched_albums": ["mb-rel-9"]}), "application/json")}
+    client.post("/api/v1/enrich/import?mode=merge&dry_run=true", files=files, auth=auth)
+    assert store.enriched_albums.read() == before
+
+
+def test_import_malformed_json_rejected(client: TestClient, auth):
+    files = {"file": ("bad.json", b"not json", "application/json")}
+    r = client.post("/api/v1/enrich/import", files=files, auth=auth)
+    assert r.status_code == 400
+
+
+def test_import_skips_invalid_entries(client: TestClient, auth):
+    files = {"file": ("mixed.json", json.dumps({
+        "enriched_albums": ["mb-rel-1", "", 42, None],
+    }), "application/json")}
+    r = client.post("/api/v1/enrich/import?mode=merge", files=files, auth=auth)
+    assert r.json()["skipped_invalid"] == 3

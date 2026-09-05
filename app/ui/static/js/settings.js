@@ -44,7 +44,71 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.settings-test-connection-btn').forEach((btn) => {
     btn.addEventListener('click', () => handleTestConnection(btn));
   });
+
+  document.getElementById('locks-import-form')?.addEventListener('submit', (e) =>
+    handleBackupImportSubmit(e, {
+      endpoint: '/api/v1/tags/locks/import',
+      fileId: 'locks-import-file',
+      modeId: 'locks-import-mode',
+      resultId: 'locks-import-result',
+      replaceConfirm: 'This replaces every saved tag lock with the contents of the '
+        + 'file — any album not in it will have its locks removed. Continue?',
+    }));
+  document.getElementById('enriched-import-form')?.addEventListener('submit', (e) =>
+    handleBackupImportSubmit(e, {
+      endpoint: '/api/v1/enrich/import',
+      fileId: 'enriched-import-file',
+      modeId: 'enriched-import-mode',
+      resultId: 'enriched-import-result',
+      replaceConfirm: 'This replaces the entire enriched-albums log with the contents '
+        + 'of the file — any id not in it will be removed (and re-enriched on the next '
+        + 'run). Continue?',
+    }));
 });
+
+// ── Per-feature backup & restore (Tag Locks, Enriched Albums log) ─────────
+async function handleBackupImportSubmit(e, { endpoint, fileId, modeId, resultId, replaceConfirm }) {
+  e.preventDefault();
+  const fileInput = document.getElementById(fileId);
+  const mode = document.getElementById(modeId).value;
+  const resultEl = document.getElementById(resultId);
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  if (mode === 'replace' && !confirm(replaceConfirm)) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Importing…';
+  resultEl.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${endpoint}?mode=${encodeURIComponent(mode)}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `import failed (HTTP ${res.status})`);
+
+    resultEl.innerHTML =
+      `<span class="badge badge-green">done</span> ` +
+      `<span>+${data.added} added` +
+      (typeof data.updated === 'number' ? `, ${data.updated} updated` : '') +
+      (data.mode === 'replace' ? `, ${data.removed} removed` : '') +
+      (data.skipped_invalid ? `, ${data.skipped_invalid} skipped (invalid)` : '') +
+      ` — ${data.total_after} total</span>`;
+
+    e.target.reset();
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '⇧ Import';
+  }
+}
 
 async function handleSave(e) {
   e.preventDefault();

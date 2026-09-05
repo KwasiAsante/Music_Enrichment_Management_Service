@@ -71,3 +71,24 @@ class FieldOverrideEntry(BaseModel):
 # ── DELETE /overrides ────────────────────────────────────────────────────
 class DeleteFieldOverrideResult(BaseModel):
     deleted: bool = Field(description="True if an override entry existed and was removed.")
+
+
+# ── POST /overrides/import ──────────────────────────────────────────────────
+class ImportFieldOverridesResult(BaseModel):
+    """Response from ``POST /overrides/import``."""
+    mode:            str = Field(description="'merge' or 'replace'.")
+    added:           int = Field(description="Entries not previously present.")
+    updated:         int = Field(description="Existing entries whose values changed.")
+    unchanged:       int = Field(description="Existing entries the import matched exactly.")
+    removed:         int = Field(
+        default=0,
+        description="Entries dropped because mode='replace' and they "
+        "weren't in the imported file. Always 0 for mode='merge'.",
+    )
+    skipped_invalid: int = Field(
+        default=0,
+        description="Rows in the imported file that weren't objects, or "
+        "had no known override field with a non-empty value.",
+    )
+    total_after:     int = Field(description="Total override count after the import.")
+    dry_run:         bool = False
