@@ -90,6 +90,17 @@ class AlbumEntry(BaseModel):
         "(e.g. 'manual', 'import', 'mb_url_rel', 'search_catalog', "
         "'search_barcode', 'search_title'). None when unmapped.",
     )
+    media_type: str | None = Field(
+        default=None,
+        description="Normalized VGMDB category tag cached from the album's "
+        "files at scan time, e.g. 'video-game', 'anime'.",
+    )
+    franchise: str | None = Field(
+        default=None,
+        description="Franchise/series tag cached from the album's files at "
+        "scan time, e.g. 'Devil May Cry'. Semicolon-separated when an album "
+        "covers more than one.",
+    )
 
 
 class AlbumsPage(BaseModel):

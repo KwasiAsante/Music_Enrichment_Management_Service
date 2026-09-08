@@ -21,6 +21,7 @@ from typing import Any
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 
 from app.core.cover_art import AUDIO_EXTS, find_album_art
+from app.core.field_overrides import _normalize_media_type
 from app.core.mb_client import MBClient
 from app.core.vgmdb_client import VGMDBClient
 from app.models.album_detail import AlbumArt, AlbumDetail, TrackDetail
@@ -57,6 +58,8 @@ def get_album_detail(
     genres = _dedup_list(g for t in raw_tracks for g in _split_list_field(t.get("genre")))
     composers = _dedup_list(t["composer"] for t in raw_tracks if t.get("composer"))
     year = next((t["date"][:4] for t in raw_tracks if t.get("date")), None)
+    media_type = next((t["media_type"] for t in raw_tracks if t.get("media_type")), None)
+    franchise = _dedup_list(f for t in raw_tracks for f in _split_list_field(t.get("franchise")))
 
     performers: list[str] = []
     arrangers: list[str] = []
@@ -88,6 +91,13 @@ def get_album_detail(
                     label = _pick_lang(pub.get("names") or {})
                 catalog = catalog or vgmdb_data.get("catalog")
                 media_format = media_format or vgmdb_data.get("media_format")
+                if not media_type:
+                    media_type = _normalize_media_type(vgmdb_data.get("category"))
+                if not franchise:
+                    franchise = _dedup_list(
+                        _pick_lang(p.get("names") or {})
+                        for p in vgmdb_data.get("products") or []
+                    )
                 description = vgmdb_data.get("notes") or vgmdb_data.get("description") or None
                 if not year:
                     release_date = vgmdb_data.get("release_date") or ""
@@ -157,6 +167,8 @@ def get_album_detail(
         label=label,
         catalog=catalog,
         media_format=media_format,
+        media_type=media_type,
+        franchise=franchise,
         genres=genres,
         composers=composers,
         performers=performers,
@@ -218,6 +230,8 @@ def _read_tag_tracks(album_dir: Path) -> list[dict[str, Any]]:
             "genre": first("genre"),
             "date": first("date"),
             "duration_seconds": duration,
+            "media_type": first("media_type"),
+            "franchise": first("franchise"),
         })
 
     tracks.sort(key=lambda t: (t["disc"], t["track"]))

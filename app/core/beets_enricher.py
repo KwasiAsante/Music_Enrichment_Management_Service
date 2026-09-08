@@ -209,6 +209,23 @@ class BeetsEnricher:
         # ── already-enriched short-circuit ──────────────────────────────
         enriched = store.enriched_set()
         if mb_release_id and mb_release_id in enriched:
+            # Backfill media_type/franchise here too — this short-circuit
+            # skips beet import entirely, so an album enriched before
+            # that feature existed (or by any run that hit this branch)
+            # would otherwise never get them without a --redo. Gated on
+            # needs_media_classification() so a bulk run over an
+            # already-enriched library doesn't re-fetch VGMDB data for
+            # every album every time once they're filled in.
+            fields_auto_filled = 0
+            if self.field_overrides.needs_media_classification(album_folder):
+                short_vgmdb_id, _source, _hint = self._resolve_vgmdb_id(
+                    info, album_folder, allow_search=False,
+                )
+                if short_vgmdb_id:
+                    vgmdb_data = self.mapper.vgmdb.get_album(short_vgmdb_id)
+                    fields_auto_filled = self.field_overrides.auto_fill_media_classification(
+                        album_folder, override_folder_key, vgmdb_data,
+                    )
             fields_overridden = self.field_overrides.apply_overrides(
                 album_folder, override_folder_key,
             )
@@ -218,6 +235,7 @@ class BeetsEnricher:
                 "source": "enriched_log", "message": "already enriched",
                 "artist": artist, "album": album, "mb_release_id": mb_release_id,
                 "fields_overridden": fields_overridden,
+                "fields_auto_filled": fields_auto_filled,
             }
 
         # ── resolve VGMDB id ────────────────────────────────────────────
@@ -300,6 +318,16 @@ class BeetsEnricher:
 
         # ── success path ────────────────────────────────────────────────
         tags_fixed = self._fix_non_latin_artist_tags(album_folder, artist)
+
+        # Auto-fill media_type/franchise from VGMDB before applying any
+        # saved manual overrides, so a person's pinned correction (applied
+        # right after) always wins over this best-effort guess.
+        # get_album() returns None on any failure rather than raising.
+        vgmdb_data = self.mapper.vgmdb.get_album(vgmdb_id)
+        fields_auto_filled = self.field_overrides.auto_fill_media_classification(
+            album_folder, override_folder_key, vgmdb_data,
+        )
+
         fields_overridden = self.field_overrides.apply_overrides(album_folder, override_folder_key)
         fields_locked = self.tag_locks.restore(album_folder, locked_snapshot)
         if mb_release_id:
@@ -336,6 +364,7 @@ class BeetsEnricher:
             "ok": True, "vgmdb_id": vgmdb_id, "source": source,
             "match": match_pct, "tags_fixed": tags_fixed,
             "fields_overridden": fields_overridden,
+            "fields_auto_filled": fields_auto_filled,
             "fields_locked": fields_locked,
             "seed_category": posted_to,
             "message": "enrichment complete",
@@ -403,16 +432,25 @@ class BeetsEnricher:
             store.skipped_albums.write(skipped_log)
             log.info("--redo-skipped pulled %d entries", len(redo_skip_ids))
 
-        # Plan-then-run so progress reports a stable total.
+        # Plan-then-run so progress reports a stable total. Filter each
+        # artist's albums down to the ones actually in scope *before*
+        # running should_enrich_artist — that call does a live MB API
+        # request, and album/redo filters routinely narrow a run down to
+        # one album, so there's no reason to pay for an MB lookup (plus
+        # its mandatory ~1.1s rate-limit sleep) for every other artist in
+        # the library on every run.
         plan: list[tuple[str, dict, str]] = []   # (artist_folder, info, decision)
         for artist_folder in sorted(by_artist.keys()):
+            matching = [
+                (fn, info) for fn, info in by_artist[artist_folder]
+                if self._album_matches_filter(info, album_filters)
+                and (not redo_skipped or (info.get("mb_release_id") or "") in redo_skip_ids)
+            ]
+            if not matching:
+                continue
             mb_artist_id = self._get_artist_mb_id(self.artist_root / artist_folder)
             decision, reason = self.should_enrich_artist(artist_folder, mb_artist_id)
-            for fn, info in by_artist[artist_folder]:
-                if not self._album_matches_filter(info, album_filters):
-                    continue
-                if redo_skipped and (info.get("mb_release_id") or "") not in redo_skip_ids:
-                    continue
+            for fn, info in matching:
                 plan.append((artist_folder, info, decision))
 
         total = len(plan)
@@ -634,6 +672,7 @@ class BeetsEnricher:
             try:
                 r = _subprocess_run(
                     cmd, capture_output=True, text=True, timeout=30,
+                    encoding="utf-8", errors="replace",
                     env=self._beet_env(),
                 )
                 removed = r.returncode == 0
@@ -643,6 +682,7 @@ class BeetsEnricher:
         try:
             r = _subprocess_run(
                 cmd, capture_output=True, text=True, timeout=30,
+                encoding="utf-8", errors="replace",
                 env=self._beet_env(),
             )
             return removed or r.returncode == 0
@@ -663,6 +703,7 @@ class BeetsEnricher:
         try:
             r = _subprocess_run(
                 cmd, input="a\n", capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 timeout=300, env=self._beet_env(),
             )
             output = (r.stdout + r.stderr).strip()
@@ -672,12 +713,20 @@ class BeetsEnricher:
             )
             return r.returncode == 0, output
         except subprocess.TimeoutExpired:
+            log.warning("beet import timed out after 300s: %s", " ".join(cmd))
             return False, "timeout"
         except FileNotFoundError as exc:
+            log.warning("beet binary not found at %r: %s", settings.beet_bin, exc)
             return False, (
                 f"beet binary not found at {settings.beet_bin!r}: {exc}"
             )
         except Exception as exc:  # noqa: BLE001
+            # Logged with the full traceback here because _classify_failure()
+            # only pattern-matches known substrings — anything else (e.g. a
+            # subprocess-launch/encoding error) would otherwise surface as
+            # nothing but the generic "beet import failed" fallback message,
+            # with the actual cause never appearing in any log.
+            log.exception("beet import raised an unexpected exception: %s", " ".join(cmd))
             return False, str(exc)
 
     # ── private: post-import tag fix ────────────────────────────────────

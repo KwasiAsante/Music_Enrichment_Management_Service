@@ -52,6 +52,12 @@ class EnrichAlbumResult(BaseModel):
         "field-override mapping (see /api/v1/overrides) — see "
         "app.core.field_overrides.",
     )
+    fields_auto_filled: int = Field(
+        default=0,
+        description="Files whose media_type/franchise tags were "
+        "auto-filled from VGMDB — see "
+        "app.core.field_overrides.auto_fill_media_classification.",
+    )
     fields_locked: int = Field(
         default=0,
         description="File writes that restored a locked tag field to its "

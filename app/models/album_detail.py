@@ -46,6 +46,16 @@ class AlbumDetail(BaseModel):
     label: str | None = None
     catalog: str | None = None
     media_format: str | None = None
+    media_type: str | None = Field(
+        default=None,
+        description="Normalized VGMDB category, e.g. 'video-game', 'anime', "
+        "'live-action' — distinct from media_format (CD/digital/etc).",
+    )
+    franchise: list[str] = Field(
+        default_factory=list,
+        description="Specific game/anime/etc. title(s) this album belongs "
+        "to, from VGMDB's 'products' field, e.g. 'Devil May Cry'.",
+    )
 
     genres: list[str] = Field(default_factory=list)
     composers: list[str] = Field(default_factory=list)

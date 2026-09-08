@@ -67,6 +67,9 @@ class VGMdbPlugin(BeetsPlugin):
     headers = {
         "User-Agent": USERAGENT
     }
+    # Neither VGMDB request had a timeout before — a genuine network hang
+    # would block the whole `beet import` subprocess indefinitely.
+    REQUEST_TIMEOUT = 15
 
     def __init__(self):
         """Load plugin config and pre-compute the language/artist-role
@@ -257,7 +260,8 @@ class VGMdbPlugin(BeetsPlugin):
         try:
             req = requests.get(
                 f"{self._searchalbumsurl}{query}?format=json",
-                headers=self.headers
+                headers=self.headers,
+                timeout=self.REQUEST_TIMEOUT,
             )
             items = req.json()
             albums = []
@@ -273,12 +277,16 @@ class VGMdbPlugin(BeetsPlugin):
                     self._log.debug("Too many result on VGMDB, breaking")
                     break
             return albums
+        # ChunkedEncodingError and JSONDecodeError both subclass
+        # RequestException, so they have to be caught first — otherwise
+        # the broad RequestException branch below always wins and a
+        # malformed-response error gets logged as "Network Exception".
+        except requests.exceptions.ChunkedEncodingError as e:
+            self._log.error(f"Chunked Encoding Exception: {query} — {e}")
+        except requests.exceptions.JSONDecodeError as e:
+            self._log.error(f"Json Decode Error: {query} — {e}")
         except requests.exceptions.RequestException as e:
-            self._log.error(f"Network Exception: {query}")
-        except requests.exceptions.ChunkedEncodingError:
-            self._log.error(f"Chunked Encoding Exception: {query}")
-        except requests.exceptions.JSONDecodeError:
-            self._log.error(f"Json Decode Error: {query}")
+            self._log.error(f"Network Exception: {query} — {e}")
         return []
 
     # ── Formatting helpers ─────────────────────────────────────────────────────
@@ -527,14 +535,18 @@ class VGMdbPlugin(BeetsPlugin):
         self._log.debug(f"Querying VgmDB for release {album_id}")
         try:
             url = f"{self._albumurl}{album_id}"
-            req = requests.get(f"{url}?format=json", headers=self.headers)
+            req = requests.get(f"{url}?format=json", headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             req.raise_for_status()
             vgmdbinfo = req.json()
             return self.format_album_vgmdbinfo(vgmdbinfo, url=url)
         except requests.exceptions.HTTPError as e:
             self._log.error(f"HTTP Error: {album_id} — {e}")
-        except requests.exceptions.RequestException as e:
-            self._log.error(f"Network Problem: {album_id} — {e}")
+        # JSONDecodeError subclasses RequestException, so it has to be
+        # caught first — otherwise the broad RequestException branch
+        # below always wins and a malformed-response error gets logged
+        # as "Network Problem" instead of what it actually is.
         except requests.exceptions.JSONDecodeError as e:
             self._log.error(f"JsonDecodeError: {album_id} — {e}")
+        except requests.exceptions.RequestException as e:
+            self._log.error(f"Network Problem: {album_id} — {e}")
         return None

@@ -18,6 +18,7 @@ from app.storage.json_store import store
 VGMDB_PAYLOAD = {
     "catalog": "ABC-001",
     "category": "Video Game Music",
+    "products": [{"names": {"en": "Devil May Cry"}}],
     "publisher": {"names": {"en": "Square Enix"}},
     "composers": [{"names": {"en": "Some Session Composer"}}],
     "performers": [{"names": {"en": "Real Band Name", "ja": "リアルバンド"}}],
@@ -67,6 +68,26 @@ def test_get_options_builds_candidates_from_vgmdb(isolated_env):
 
     label_field = next(f for f in options["fields"] if f["field"] == "label")
     assert label_field["candidates"] == [{"value": "Square Enix", "label": "VGMDB label (English)"}]
+
+    media_type_field = next(f for f in options["fields"] if f["field"] == "media_type")
+    assert media_type_field["candidates"] == [{"value": "video-game-music", "label": "VGMDB category"}]
+
+    franchise_field = next(f for f in options["fields"] if f["field"] == "franchise")
+    assert franchise_field["candidates"] == [{"value": "Devil May Cry", "label": "VGMDB product"}]
+
+
+@pytest.mark.parametrize(
+    ("category", "expected"),
+    [
+        ("Game", "video-game"),
+        ("Animation", "anime"),
+        ("Live Action", "live-action"),
+        (None, None),
+        ("", None),
+    ],
+)
+def test_normalize_media_type(category, expected):
+    assert fo._normalize_media_type(category) == expected
 
 
 def test_get_options_no_vgmdb_mapping_warns_and_has_no_candidates(isolated_env):
@@ -242,6 +263,70 @@ def test_apply_overrides_tolerates_a_tag_key_the_format_rejects(isolated_env, tm
         fixed = fo.FieldOverrideService().apply_overrides(album_dir, "Some/Folder")
 
     assert fixed == 1  # albumartist/artist still got written despite composer failing
+
+
+# ── auto_fill_media_classification (post beet-import auto-guess step) ────
+def test_auto_fill_media_classification_writes_computed_values(isolated_env, tmp_path):
+    album_dir = tmp_path / "album"
+    album_dir.mkdir()
+    (album_dir / "01.flac").touch()
+
+    fakes: list[_FakeAudio] = []
+
+    def _fake_mutagen(path, easy=True):  # noqa: ARG001
+        audio = _FakeAudio()
+        fakes.append(audio)
+        return audio
+
+    with patch.object(fo, "MutagenFile", side_effect=_fake_mutagen):
+        fixed = fo.FieldOverrideService().auto_fill_media_classification(
+            album_dir, "Real Band Name/Test OST", VGMDB_PAYLOAD,
+        )
+
+    assert fixed == 1
+    assert fakes[0].tags["media_type"] == ["video-game-music"]
+    assert fakes[0].tags["franchise"] == ["Devil May Cry"]
+
+
+def test_auto_fill_media_classification_skips_field_with_saved_override(isolated_env, tmp_path):
+    album_dir = tmp_path / "album"
+    album_dir.mkdir()
+    (album_dir / "01.flac").touch()
+
+    store.field_overrides.write({
+        "Real Band Name/Test OST": {"fields": {"media_type": "anime"}},
+    })
+
+    fakes: list[_FakeAudio] = []
+
+    def _fake_mutagen(path, easy=True):  # noqa: ARG001
+        audio = _FakeAudio()
+        fakes.append(audio)
+        return audio
+
+    with patch.object(fo, "MutagenFile", side_effect=_fake_mutagen):
+        fo.FieldOverrideService().auto_fill_media_classification(
+            album_dir, "Real Band Name/Test OST", VGMDB_PAYLOAD,
+        )
+
+    # media_type has a manual pin, so the auto-guess must not touch it —
+    # only franchise (no saved override) gets written.
+    assert "media_type" not in fakes[0].tags
+    assert fakes[0].tags["franchise"] == ["Devil May Cry"]
+
+
+def test_auto_fill_media_classification_noop_without_vgmdb_data(isolated_env, tmp_path):
+    album_dir = tmp_path / "album"
+    album_dir.mkdir()
+    (album_dir / "01.flac").touch()
+
+    with patch.object(fo, "MutagenFile") as mock_mutagen:
+        fixed = fo.FieldOverrideService().auto_fill_media_classification(
+            album_dir, "Real Band Name/Test OST", None,
+        )
+
+    assert fixed == 0
+    mock_mutagen.assert_not_called()
 
 
 def test_apply_overrides_artist_plural_keys_tolerated_on_id3_like_formats(isolated_env, tmp_path):

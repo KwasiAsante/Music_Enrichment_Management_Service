@@ -223,6 +223,8 @@ def library_page(
         enriched=(view == "enriched"),
         source=source,
         q=None,
+        media_type=None,
+        franchise=None,
         page=1,
         limit=50,
     )

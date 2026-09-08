@@ -20,6 +20,7 @@ def test_tags_plus_vgmdb_supplement(isolated_env):
     vgmdb_payload = {
         "catalog": "ABC-001", "release_date": "2020-05-01", "category": "Video Game Music",
         "media_format": "2 CDs", "notes": "A great soundtrack.",
+        "products": [{"names": {"en": "Final Fantasy VIII"}}],
         "publisher": {"names": {"en": "Square Enix"}},
         "composers": [{"names": {"en": "Nobuo Uematsu"}}],
         "performers": [{"names": {"en": "Tokyo Philharmonic"}}],
@@ -32,9 +33,11 @@ def test_tags_plus_vgmdb_supplement(isolated_env):
     }
     tag_tracks = [
         {"disc": 1, "track": 1, "title": "Opening Theme", "composer": "Nobuo Uematsu",
-         "genre": "Soundtrack", "date": "2020-05-01", "duration_seconds": 125.5},
+         "genre": "Soundtrack", "date": "2020-05-01", "duration_seconds": 125.5,
+         "media_type": None, "franchise": None},
         {"disc": 1, "track": 2, "title": "Battle Theme", "composer": "Nobuo Uematsu",
-         "genre": "Soundtrack", "date": "2020-05-01", "duration_seconds": 180.0},
+         "genre": "Soundtrack", "date": "2020-05-01", "duration_seconds": 180.0,
+         "media_type": None, "franchise": None},
     ]
 
     with patch.object(VGMDBClient, "get_album", return_value=vgmdb_payload), \
@@ -53,9 +56,37 @@ def test_tags_plus_vgmdb_supplement(isolated_env):
     assert result.genres == ["Soundtrack"]  # tags already had it, not overwritten
     assert result.label == "Square Enix"
     assert result.description == "A great soundtrack."
+    assert result.media_type == "video-game-music"  # from VGMDB category, tags had none
+    assert result.franchise == ["Final Fantasy VIII"]  # from VGMDB products
     assert result.art.front is True and result.art.back is False
     assert len(result.tracks) == 2  # from tags, not the VGMDB tracklist fallback
     assert result.warnings == []
+
+
+def test_media_type_and_franchise_from_tags_are_not_overwritten(isolated_env):
+    vgmdb_payload = {
+        "catalog": "ABC-001", "release_date": "2020-05-01", "category": "Video Game Music",
+        "products": [{"names": {"en": "Wrong Title"}}],
+        "publisher": {}, "composers": [], "performers": [], "arrangers": [], "lyricists": [],
+        "discs": [],
+    }
+    tag_tracks = [
+        {"disc": 1, "track": 1, "title": "Opening Theme", "composer": None,
+         "genre": None, "date": None, "duration_seconds": 125.5,
+         "media_type": "anime", "franchise": "Re:Creators"},
+    ]
+
+    with patch.object(VGMDBClient, "get_album", return_value=vgmdb_payload), \
+         patch.object(ad, "_read_tag_tracks", return_value=tag_tracks), \
+         patch.object(ad, "find_album_art", return_value={}):
+        result = ad.get_album_detail(
+            folder="Test Artist/Test OST", album_dir=Path("/whatever"),
+            artist="Test Artist", album="Test OST",
+            mb_release_id=None, vgmdb_id="12345", mapped=True, enriched=True,
+        )
+
+    assert result.media_type == "anime"
+    assert result.franchise == ["Re:Creators"]
 
 
 def test_no_tags_falls_back_to_vgmdb_tracklist(isolated_env):
