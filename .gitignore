@@ -187,3 +187,8 @@ cython_debug/
 # can hold plaintext secrets saved via the Settings page — never commit
 # this even accidentally.
 data/
+
+# Local bare-metal BEETSDIR (see README.md's "Running without Docker" and
+# .vscode/launch.json) — a per-machine copy of config.yaml plus whatever
+# state files beets itself drops next to it (state.pickle etc).
+beets-config/

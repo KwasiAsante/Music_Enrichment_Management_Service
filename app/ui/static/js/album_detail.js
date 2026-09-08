@@ -88,7 +88,12 @@ async function handleReenrich() {
   const btn = document.getElementById('reenrich-btn');
   const statusEl = document.getElementById('reenrich-status');
   const { folder, album } = btn.dataset;
-  const artistFolder = folder.split('/')[0];
+  // `folder` comes straight from album_list.json's "folder" value, which
+  // is str(Path.relative_to(...)) on the server — backslash-separated on
+  // a Windows bare-metal run, forward-slash in Docker/Linux. Split on
+  // either so this doesn't silently degrade to "whole folder string as
+  // the artist filter" (and therefore "no album matches") on Windows.
+  const artistFolder = folder.split(/[/\\]/)[0];
 
   if (!confirm(`Re-enrich "${album}"? This clears it from the enriched log and re-runs enrichment for just this album.`)) return;
 
@@ -138,7 +143,15 @@ function pollReenrichJob(jobId) {
         statusEl.innerHTML = `<span class="badge badge-green">done</span> <span>Reloading…</span>`;
         window.location.reload();
       } else {
-        statusEl.innerHTML = `<span class="badge badge-yellow">no change</span> <span>Nothing was re-enriched — check the <a href="${window.APP_URL_BASE}/enrich">Enrich page</a> log for why.</span>`;
+        // run_bulk() sorts a non-enriched album into exactly one of these —
+        // surface its actual reason instead of sending the user log-diving
+        // for something the response already told us.
+        const detail = (job.result?.failed || [])[0] || (job.result?.skipped || [])[0]
+          || (job.result?.no_map || [])[0];
+        const reasonHtml = detail?.reason
+          ? `<span>${escapeHtml(detail.reason)}</span>`
+          : `<span>Check the <a href="${window.APP_URL_BASE}/enrich">Enrich page</a> log for why.</span>`;
+        statusEl.innerHTML = `<span class="badge badge-yellow">no change</span> ${reasonHtml}`;
         btn.disabled = false;
         btn.textContent = '⟳ Re-enrich';
       }

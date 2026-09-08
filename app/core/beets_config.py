@@ -39,7 +39,7 @@ def sync_beets_vgmdb_url() -> None:
 
     updated = re.sub(
         r"(?m)^(\s*baseurl:\s*).+$",
-        rf"\g<1>{desired}",
+        lambda m: f"{m.group(1)}{desired}",
         text,
         count=1,
     )
@@ -70,7 +70,7 @@ def sync_beets_directory() -> None:
 
     updated = re.sub(
         r"(?m)^(directory:\s*).+$",
-        rf"\g<1>{desired}",
+        lambda m: f"{m.group(1)}{desired}",
         text,
         count=1,
     )

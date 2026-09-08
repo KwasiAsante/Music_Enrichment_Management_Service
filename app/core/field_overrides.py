@@ -31,6 +31,7 @@ from typing import Any
 
 from mutagen import File as MutagenFile  # type: ignore[import-untyped]
 from mutagen.easyid3 import EasyID3  # type: ignore[import-untyped]
+from mutagen.easymp4 import EasyMP4Tags  # type: ignore[import-untyped]
 
 from app.config import settings
 from app.core.vgmdb_client import VGMDBClient
@@ -40,12 +41,17 @@ log = logging.getLogger("music-lib-helper.field_overrides")
 
 AUDIO_EXTS = {".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".ape"}
 
-# "media_type" and "franchise" aren't in EasyID3's default key table (unlike
-# e.g. "catalognumber", which mutagen registers to TXXX:CATALOGNUMBER out of
-# the box) — register them the same way so MP3 files can carry these tags
-# too, not just FLAC/Vorbis (which accepts arbitrary comment keys already).
+# "media_type" and "franchise" aren't in EasyID3's/EasyMP4's default key
+# tables (unlike e.g. "catalognumber", which mutagen registers out of the
+# box) — register them the same way so MP3 (ID3 TXXX frames) and M4A/AAC
+# (MP4 freeform atoms) can carry these tags too, not just FLAC/Vorbis
+# (which accepts arbitrary comment keys already). Without the MP4
+# registration, writes to these two fields on an M4A file fail silently
+# (per-key, caught in _write_fields) with "not a valid key".
 EasyID3.RegisterTXXXKey("media_type", "MEDIA_TYPE")
 EasyID3.RegisterTXXXKey("franchise", "FRANCHISE")
+EasyMP4Tags.RegisterFreeformKey("media_type", "MEDIA_TYPE")
+EasyMP4Tags.RegisterFreeformKey("franchise", "FRANCHISE")
 
 _LANG_PRIORITY = ("en", "ja-latn", "ja")
 _LANG_LABELS = {"en": "English", "ja-latn": "Romaji", "ja": "Japanese"}
@@ -393,6 +399,19 @@ class FieldOverrideService:
                 log.debug("override apply failed for %s: %s", audio_path, exc)
 
         return fixed
+
+    def needs_media_classification(self, album_folder: Path) -> bool:
+        """True if this album is missing ``media_type`` or ``franchise``
+        entirely. Lets a caller skip the VGMDB round-trip
+        :meth:`auto_fill_media_classification` needs when both are
+        already filled — without this, a bulk run over an
+        already-enriched library would re-fetch VGMDB data for every
+        album on every run forever, since the already-enriched
+        short-circuit in :class:`app.core.beets_enricher.BeetsEnricher`
+        has no other reason to know whether backfilling is still needed.
+        """
+        current = self._read_current_tags(album_folder)
+        return not current.get("media_type") or not current.get("franchise")
 
     def apply_overrides(self, album_folder: Path, folder: str) -> int:
         """Write every saved override for ``folder`` into the audio
