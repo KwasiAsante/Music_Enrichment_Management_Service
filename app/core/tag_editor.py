@@ -47,6 +47,7 @@ class TagEditorService:
         album_dir = self.artist_root / folder
         values = tag_fields.read_album_fields(album_dir)
         locked = set(self.tag_locks.get_locks(folder))
+        track_locked = set(self.tag_locks.get_track_locks(folder))
 
         fields = [
             {
@@ -67,6 +68,10 @@ class TagEditorService:
             "artist": info.get("artist") or "",
             "album": info.get("album") or "",
             "fields": fields,
+            "track_locks": {
+                "title": "title" in track_locked,
+                "artist": "artist" in track_locked,
+            },
             "warnings": warnings,
         }
 

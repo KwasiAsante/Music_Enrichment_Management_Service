@@ -10,10 +10,14 @@ the data volume (``settings.app_data_dir``):
     skipped_albums.json   {mb_id: {vgmdb_id, folder, artist, album,
                                    match_percentage, threshold, skipped_reason}}
     excluded_artists.json [artist_name, ...]  (Western acts w/ no VGMDB presence)
+    included_artists.json [artist_name, ...]  (Western acts force-enriched
+                           anyway — overrides the MB-country skip list)
     field_overrides.json  {folder: {mb_release_id, artist, album,
                                      fields: {field_name: value}}}
     locked_fields.json    {folder: [field_name, ...]}  — see
                            app/core/tag_locks.py
+    locked_track_fields.json {folder: [field_name, ...]}  ('title'/'artist'
+                           only) — per-track locks, see app/core/tag_locks.py
 
 They stay plain JSON on purpose — the standalone CLI scripts in
 ``scripts/`` read and write the exact same files, and they're trivial to
@@ -50,8 +54,6 @@ log = logging.getLogger("music-lib-helper.storage")
 # on upgrade for anyone who hasn't touched the new artist-exclusion UI yet.
 _DEFAULT_EXCLUDED_ARTISTS: list[str] = [
     "Linkin Park", "Thousand Foot Krutch", "Barenaked Ladies",
-    "Jeff Williams", "Jeff Williams feat. Casey Lee Williams",
-    "Jeff Williams feat. Casey Lee Williams with Alex Abraham",
 ]
 
 
@@ -129,11 +131,25 @@ class JsonStore:
         self.excluded_artists = JsonFile(
             data_dir / "excluded_artists.json", list(_DEFAULT_EXCLUDED_ARTISTS),
         )
+        # Artists that *do* have a VGMDB presence despite being tagged with
+        # a Western MB country/area — a per-artist override for the
+        # ``BeetsEnricher.SKIP_COUNTRIES`` heuristic, editable at runtime via
+        # /api/v1/mapping/included-artists (see vgmdb_mapper.py). Checked
+        # before the country lookup, so it wins over SKIP_COUNTRIES but not
+        # over excluded_artists (an explicit exclude always wins).
+        self.included_artists = JsonFile(data_dir / "included_artists.json", [])
         # Per-album manual tag-field overrides — see app/core/field_overrides.py.
         self.field_overrides = JsonFile(data_dir / "field_overrides.json", {})
         # Per-album tag fields locked against enrichment overwriting them —
         # see app/core/tag_locks.py.
         self.locked_fields = JsonFile(data_dir / "locked_fields.json", {})
+        # Per-track fields (title, track-level artist) locked against
+        # enrichment overwriting each track's own value — same
+        # {folder: [field_name, ...]} shape as locked_fields.json, kept
+        # separate since the restore semantics differ (each track keeps
+        # its own value, rather than one value broadcast album-wide). See
+        # app/core/tag_locks.py's snapshot_tracks/restore_tracks.
+        self.locked_track_fields = JsonFile(data_dir / "locked_track_fields.json", {})
         # artists_mbids.json is a *list* on disk (matches the format the Picard
         # export pipeline uploads to a GitHub Gist), but the exporter treats it
         # as a dict-keyed-by-Artist internally for merging.

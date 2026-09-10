@@ -70,6 +70,23 @@ PER_TRACK_ONLY_KEYS: frozenset[str] = frozenset({
     "musicbrainz_trackid", "musicbrainz_releasetrackid", "musicbrainz_workid",
 })
 
+# Of PER_TRACK_ONLY_KEYS above, these two are still useful to protect
+# from enrichment even though their value legitimately differs from
+# track to track — unlike every other field this module handles,
+# "locking" one of these doesn't mean "keep one value album-wide" (that
+# would overwrite every track with track 1's title), it means "keep each
+# track's own value". See app.core.tag_locks.TagLockService's
+# snapshot_tracks/restore_tracks, the only caller allowed to read/write
+# these per-track rather than per-album. "artist" here is deliberately
+# just the plain ARTIST tag, not the full ARTIST_TAG_KEYS list
+# STANDARD_FIELD_TAG_KEYS uses for the albumwide "artist" field — locking
+# track artist must never touch albumartist, a separate album-wide value.
+TRACK_LOCK_TAG_KEYS: dict[str, tuple[str, ...]] = {
+    "title": ("title",),
+    "artist": ("artist",),
+}
+TRACK_LOCKABLE_FIELDS: tuple[str, ...] = tuple(TRACK_LOCK_TAG_KEYS.keys())
+
 _TAG_SOURCE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("musicbrainz", "musicbrainz"),
     ("vgmdb", "vgmdb"),
@@ -262,3 +279,56 @@ def _write_field_to_file(
         return custom_tags.delete_custom_tag(path, field)
 
     return False
+
+
+def _track_position_key(tags: Any) -> tuple[str, str]:
+    """(discnumber, tracknumber) for one file's tags — used to match a
+    track up before and after enrichment even if beets renames the file
+    itself based on the newly-written title."""
+    return (_first_value(tags, "discnumber") or "1", _first_value(tags, "tracknumber") or "")
+
+
+def read_track_field_by_position(album_dir: Path, field: str) -> dict[tuple[str, str], str | None]:
+    """Current value of one track-level lockable field (``title`` or
+    ``artist``, see ``TRACK_LOCK_TAG_KEYS``) on every file in the album,
+    keyed by ``(discnumber, tracknumber)`` rather than file path — each
+    track keeps its own value, unlike ``read_album_fields``."""
+    keys = TRACK_LOCK_TAG_KEYS[field]
+    values: dict[tuple[str, str], str | None] = {}
+    for f in iter_audio_files(album_dir):
+        try:
+            audio = MutagenFile(str(f), easy=True)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("could not read %s: %s", f, exc)
+            continue
+        if audio is None:
+            continue
+        tags = audio.tags or {}
+        values[_track_position_key(tags)] = _first_value(tags, *keys)
+    return values
+
+
+def write_track_field_by_position(
+    album_dir: Path, field: str, values: dict[tuple[str, str], str | None],
+) -> int:
+    """Write each track's own snapshotted value of a track-level field
+    (see ``read_track_field_by_position``) back to whichever file now
+    holds that ``(discnumber, tracknumber)`` position — never broadcasting
+    one value to every track like ``write_album_field`` does. Returns the
+    number of files touched."""
+    keys = TRACK_LOCK_TAG_KEYS[field]
+    touched = 0
+    for f in iter_audio_files(album_dir):
+        try:
+            audio = MutagenFile(str(f), easy=True)
+            if not audio or audio.tags is None:
+                continue
+        except Exception as exc:  # noqa: BLE001
+            log.debug("could not open %s: %s", f, exc)
+            continue
+        value = values.get(_track_position_key(audio.tags))
+        if value is None:
+            continue
+        if _write_field_to_file(f, field, keys, value, is_standard=True):
+            touched += 1
+    return touched

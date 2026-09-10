@@ -125,6 +125,29 @@ def test_excluded_artist_removed_from_unmapped(client: TestClient, auth, isolate
     assert "Linkin Park" in artists
 
 
+# ── included artists (Western-block override) ────────────────────────────
+def test_included_artists_empty_by_default(client: TestClient, auth):
+    r = client.get("/api/v1/mapping/included-artists", auth=auth)
+    assert r.json() == []
+
+
+def test_add_and_remove_included_artist(client: TestClient, auth):
+    r = client.post("/api/v1/mapping/included-artists", json={"artist": "Jeff Williams"}, auth=auth)
+    assert r.json()["changed"] is True
+
+    r = client.post("/api/v1/mapping/included-artists", json={"artist": "jeff williams"}, auth=auth)
+    assert r.json()["changed"] is False  # case-insensitive dedup
+
+    r = client.get("/api/v1/mapping/included-artists", auth=auth)
+    assert "Jeff Williams" in r.json()
+
+    r = client.delete("/api/v1/mapping/included-artists/Jeff%20Williams", auth=auth)
+    assert r.json()["changed"] is True
+
+    r = client.delete("/api/v1/mapping/included-artists/Nobody", auth=auth)
+    assert r.json()["changed"] is False
+
+
 def test_mappings_page_has_bulk_select_ui(client: TestClient, auth, isolated_env):
     from app.storage.json_store import store
 

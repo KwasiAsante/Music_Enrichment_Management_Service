@@ -25,6 +25,16 @@ class TagFieldView(BaseModel):
     )
 
 
+class TrackLockState(BaseModel):
+    """Whether track titles / track-level artist tags are protected from
+    enrichment. Applies uniformly to every track in the album — each
+    track still keeps its own value, this doesn't force one shared value
+    like a field lock does (see ``TagFieldView.locked``)."""
+
+    title: bool = False
+    artist: bool = False
+
+
 class AlbumTagsView(BaseModel):
     """Full tag-editor view for one album."""
 
@@ -32,6 +42,7 @@ class AlbumTagsView(BaseModel):
     artist: str
     album: str
     fields: list[TagFieldView] = Field(default_factory=list)
+    track_locks: TrackLockState = Field(default_factory=TrackLockState)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -57,6 +68,16 @@ class SetLockRequest(BaseModel):
 class SetLockResult(BaseModel):
     folder: str
     locked_fields: list[str]
+
+
+class SetTrackLockRequest(BaseModel):
+    field: str = Field(description="'title' or 'artist'.")
+    locked: bool
+
+
+class SetTrackLockResult(BaseModel):
+    folder: str
+    track_locks: TrackLockState
 
 
 # ── POST /tags/locks/import ─────────────────────────────────────────────────

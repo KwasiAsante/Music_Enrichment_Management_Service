@@ -112,3 +112,69 @@ def test_restore_skips_a_stale_per_track_lock_instead_of_raising(isolated_env, t
         applied = TagLockService().restore(tmp_path, {"title": "Old Title", "genre": "Rock"})
 
     assert applied == 1
+
+
+# ── per-track locks (title / track artist) ──────────────────────────────────
+def test_get_track_locks_empty_by_default(isolated_env):
+    assert TagLockService().get_track_locks("Some/Folder") == []
+
+
+def test_set_track_lock_true_then_false_round_trips(isolated_env):
+    svc = TagLockService()
+    assert svc.set_track_lock("Some/Folder", "title", True) == ["title"]
+    assert svc.get_track_locks("Some/Folder") == ["title"]
+
+    assert svc.set_track_lock("Some/Folder", "title", False) == []
+    assert svc.get_track_locks("Some/Folder") == []
+    assert "Some/Folder" not in store.locked_track_fields.read()
+
+
+def test_set_track_lock_rejects_field_outside_title_or_artist(isolated_env):
+    with pytest.raises(ValueError):
+        TagLockService().set_track_lock("Some/Folder", "genre", True)
+    assert TagLockService().get_track_locks("Some/Folder") == []
+
+
+def test_set_track_lock_unlocking_an_invalid_field_never_raises(isolated_env):
+    assert TagLockService().set_track_lock("Some/Folder", "genre", False) == []
+
+
+def test_set_track_lock_does_not_duplicate_when_already_set(isolated_env):
+    svc = TagLockService()
+    svc.set_track_lock("Some/Folder", "artist", True)
+    assert svc.set_track_lock("Some/Folder", "artist", True) == ["artist"]
+
+
+def test_snapshot_tracks_is_noop_when_nothing_locked(isolated_env, tmp_path):
+    with patch.object(tf, "read_track_field_by_position") as mock_read:
+        result = TagLockService().snapshot_tracks(tmp_path, "Some/Folder")
+    assert result == {}
+    mock_read.assert_not_called()
+
+
+def test_snapshot_tracks_reads_locked_fields_by_position(isolated_env, tmp_path):
+    svc = TagLockService()
+    svc.set_track_lock("Some/Folder", "title", True)
+
+    with patch.object(tf, "read_track_field_by_position",
+                       return_value={("1", "1"): "Track One"}) as mock_read:
+        snapshot = svc.snapshot_tracks(tmp_path, "Some/Folder")
+
+    mock_read.assert_called_once_with(tmp_path, "title")
+    assert snapshot == {"title": {("1", "1"): "Track One"}}
+
+
+def test_restore_tracks_writes_every_locked_field_by_position(isolated_env, tmp_path):
+    with patch.object(tf, "write_track_field_by_position", return_value=3) as mock_write:
+        applied = TagLockService().restore_tracks(
+            tmp_path, {"title": {("1", "1"): "Track One"}, "artist": {("1", "1"): "Someone"}},
+        )
+    assert applied == 6  # 3 + 3
+    mock_write.assert_any_call(tmp_path, "title", {("1", "1"): "Track One"})
+    mock_write.assert_any_call(tmp_path, "artist", {("1", "1"): "Someone"})
+
+
+def test_restore_tracks_empty_snapshot_is_noop(isolated_env, tmp_path):
+    with patch.object(tf, "write_track_field_by_position") as mock_write:
+        assert TagLockService().restore_tracks(tmp_path, {}) == 0
+    mock_write.assert_not_called()

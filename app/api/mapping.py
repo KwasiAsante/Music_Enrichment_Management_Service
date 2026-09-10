@@ -13,6 +13,10 @@ excluded artists).
                                         and bulk enrichment.
 * ``POST   /excluded-artists``        — add an artist to that list.
 * ``DELETE /excluded-artists/{name}`` — remove an artist from that list.
+* ``GET    /included-artists``        — artists force-enriched despite a
+                                        Western MB country/area.
+* ``POST   /included-artists``        — add an artist to that list.
+* ``DELETE /included-artists/{name}`` — remove an artist from that list.
 * ``POST   /search``                  — run the four-step VGMDB search
                                         pipeline for one album.
 * ``PUT    /{mb_release_id}``         — set / update a single mapping
@@ -47,6 +51,8 @@ from app.models.mapping import (
     ExcludedArtistRequest,
     ExcludedArtistResult,
     ImportMappingsResult,
+    IncludedArtistRequest,
+    IncludedArtistResult,
     MappingEntry,
     SearchRequest,
     SearchResult,
@@ -140,6 +146,42 @@ def remove_excluded_artist(
         db.add_activity("mapping", f"excluded artist removed: {artist}",
                         artist=artist)
     return ExcludedArtistResult(artist=artist, changed=changed)
+
+
+# ── GET /mapping/included-artists ───────────────────────────────────────────
+@router.get("/included-artists", response_model=list[str])
+def list_included_artists() -> list[str]:
+    """Artists force-enriched despite a Western MB country/area — the
+    override for the automatic Western-artist skip during bulk enrichment."""
+    return VGMDBMapper().list_included_artists()
+
+
+# ── POST /mapping/included-artists ──────────────────────────────────────────
+@router.post("/included-artists", response_model=IncludedArtistResult)
+def add_included_artist(req: IncludedArtistRequest) -> IncludedArtistResult:
+    """Add an artist to the force-include list."""
+    try:
+        changed = VGMDBMapper().add_included_artist(req.artist)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if changed:
+        db.add_activity("mapping", f"included artist added: {req.artist}",
+                        artist=req.artist)
+    return IncludedArtistResult(artist=req.artist, changed=changed)
+
+
+# ── DELETE /mapping/included-artists/{artist} ───────────────────────────────
+@router.delete("/included-artists/{artist}", response_model=IncludedArtistResult)
+def remove_included_artist(
+    artist: str = Path(..., description="Exact artist name to un-include."),
+) -> IncludedArtistResult:
+    """Remove an artist from the force-include list — they'll go back to
+    being decided by the MB country/area lookup during bulk enrichment."""
+    changed = VGMDBMapper().remove_included_artist(artist)
+    if changed:
+        db.add_activity("mapping", f"included artist removed: {artist}",
+                        artist=artist)
+    return IncludedArtistResult(artist=artist, changed=changed)
 
 
 # ── POST /mapping/search ───────────────────────────────────────────────────

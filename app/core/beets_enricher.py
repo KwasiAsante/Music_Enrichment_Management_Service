@@ -274,6 +274,7 @@ class BeetsEnricher:
 
         # ── beet remove + import ────────────────────────────────────────
         locked_snapshot = self.tag_locks.snapshot(album_folder, override_folder_key)
+        track_locked_snapshot = self.tag_locks.snapshot_tracks(album_folder, override_folder_key)
         self._beet_remove(album_folder, vgmdb_id=vgmdb_id)
         ok, raw_output = self._beet_import(album_folder, vgmdb_id)
         output = strip_ansi(raw_output)
@@ -330,6 +331,7 @@ class BeetsEnricher:
 
         fields_overridden = self.field_overrides.apply_overrides(album_folder, override_folder_key)
         fields_locked = self.tag_locks.restore(album_folder, locked_snapshot)
+        fields_locked += self.tag_locks.restore_tracks(album_folder, track_locked_snapshot)
         if mb_release_id:
             enriched.add(mb_release_id)
             store.save_enriched_set(enriched)
@@ -538,13 +540,20 @@ class BeetsEnricher:
         The block list is ``excluded_artists.json`` — the same list
         editable from the Mappings page's Excluded Artists panel, so
         excluding an artist there also stops bulk enrichment from
-        touching them.
+        touching them. ``included_artists.json`` is the opposite knob —
+        artists with a Western MB country/area that should be force-enriched
+        anyway (e.g. a Western composer whose soundtracks are on VGMDB) —
+        checked before the country lookup so it overrides
+        :attr:`SKIP_COUNTRIES`, but an explicit exclude still wins over it.
         """
         excluded = {a.lower() for a in store.excluded_artists.read()}
         if artist_name.lower() in excluded:
             return "no", "explicitly excluded"
         if artist_name in self.ENRICH_ARTISTS:
             return "yes", ""
+        included = {a.lower() for a in store.included_artists.read()}
+        if artist_name.lower() in included:
+            return "yes", "manually included (Western-block override)"
         if not mb_artist_id:
             return "ask", "no MusicBrainz artist id in tags"
         data = self.mb.get_artist(mb_artist_id)

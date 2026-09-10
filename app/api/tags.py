@@ -6,6 +6,12 @@ here writes the file(s) immediately, and a lock protects a field from
 every future enrichment run rather than picking what value lands there.
 See :mod:`app.core.tag_editor` and :mod:`app.core.tag_locks`.
 
+``PUT /track-locks`` is a separate, parallel lock pair for ``title`` and
+track-level ``artist`` — the two per-track fields ``PUT /locks`` refuses
+to touch (they'd need one shared value written album-wide, overwriting
+every track's own title/artist). Each track keeps its own value; the
+lock is just "don't let enrichment change it."
+
 ``GET /locks/export``/``POST /locks/import`` operate on the whole
 ``locked_fields.json`` file at once, same export/import-a-backup-file
 pattern as ``/api/v1/mapping/export``.
@@ -26,6 +32,9 @@ from app.models.tag_editor import (
     ImportLockedFieldsResult,
     SetLockRequest,
     SetLockResult,
+    SetTrackLockRequest,
+    SetTrackLockResult,
+    TrackLockState,
     UpdateAlbumTagsRequest,
     UpdateAlbumTagsResult,
 )
@@ -80,6 +89,26 @@ def set_tag_lock(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return SetLockResult(folder=folder, locked_fields=fields)
+
+
+# ── PUT /tags/track-locks ─────────────────────────────────────────────────
+@router.put("/track-locks", response_model=SetTrackLockResult)
+def set_track_lock(
+    req: SetTrackLockRequest,
+    folder: str = Query(..., description="An AlbumEntry.folder value."),
+) -> SetTrackLockResult:
+    """Lock or unlock track titles or track-level artist tags against
+    every future enrichment run for this album. Unlike ``PUT /tags/locks``,
+    each track keeps its own value rather than all tracks sharing one —
+    see ``TagLockService.snapshot_tracks``/``restore_tracks``."""
+    try:
+        fields = TagLockService().set_track_lock(folder, req.field, req.locked)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return SetTrackLockResult(
+        folder=folder,
+        track_locks=TrackLockState(title="title" in fields, artist="artist" in fields),
+    )
 
 
 # ── GET /tags/locks/export ──────────────────────────────────────────────────

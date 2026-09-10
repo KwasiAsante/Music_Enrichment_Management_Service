@@ -116,6 +116,48 @@ def test_put_lock_rejects_locking_a_per_track_field(client: TestClient, auth, is
     assert r.status_code == 400
 
 
+# ── PUT /tags/track-locks ────────────────────────────────────────────────
+def test_put_track_lock_toggles_and_persists(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/track-locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "title", "locked": True}, auth=auth,
+    )
+    assert r.status_code == 200
+    assert r.json()["track_locks"] == {"title": True, "artist": False}
+
+    r = client.get("/api/v1/tags/album", params={"folder": "Real Band Name/Test OST"}, auth=auth)
+    assert r.json()["track_locks"] == {"title": True, "artist": False}
+
+    r = client.put(
+        "/api/v1/tags/track-locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "title", "locked": False}, auth=auth,
+    )
+    assert r.json()["track_locks"] == {"title": False, "artist": False}
+
+
+def test_put_track_lock_both_fields_independently(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    client.put(
+        "/api/v1/tags/track-locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "title", "locked": True}, auth=auth,
+    )
+    r = client.put(
+        "/api/v1/tags/track-locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "artist", "locked": True}, auth=auth,
+    )
+    assert r.json()["track_locks"] == {"title": True, "artist": True}
+
+
+def test_put_track_lock_rejects_a_field_other_than_title_or_artist(client: TestClient, auth, isolated_env):
+    _seed(isolated_env)
+    r = client.put(
+        "/api/v1/tags/track-locks", params={"folder": "Real Band Name/Test OST"},
+        json={"field": "genre", "locked": True}, auth=auth,
+    )
+    assert r.status_code == 400
+
+
 # ── export / import ──────────────────────────────────────────────────────
 def test_export_import_round_trip(client: TestClient, auth, isolated_env):
     store.locked_fields.write({"A/B": ["genre"]})

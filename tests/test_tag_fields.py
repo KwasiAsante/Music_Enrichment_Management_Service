@@ -4,6 +4,7 @@ both TagEditorService and TagLockService.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -308,3 +309,91 @@ def test_write_album_field_custom_field_empty_value_deletes_via_raw_fallback(tmp
 
     assert touched == 1
     mock_delete.assert_called_once_with(album_dir / "01.mp3", "MyCustom")
+
+
+# ── read_track_field_by_position / write_track_field_by_position ─────────
+def test_track_lockable_fields_are_title_and_artist():
+    assert tf.TRACK_LOCKABLE_FIELDS == ("title", "artist")
+
+
+def test_read_track_field_by_position_keys_by_disc_and_track(tmp_path):
+    album_dir = _make_album(tmp_path, "01.flac", "02.flac")
+    audios = iter([
+        _FakeAudio(_FakeTags({"title": ["One"], "tracknumber": ["1"], "discnumber": ["1"]})),
+        _FakeAudio(_FakeTags({"title": ["Two"], "tracknumber": ["2"], "discnumber": ["1"]})),
+    ])
+
+    with patch.object(tf, "MutagenFile", side_effect=lambda path, easy=True: next(audios)):
+        values = tf.read_track_field_by_position(album_dir, "title")
+
+    assert values == {("1", "1"): "One", ("1", "2"): "Two"}
+
+
+def test_read_track_field_by_position_defaults_missing_discnumber_to_one(tmp_path):
+    album_dir = _make_album(tmp_path, "01.flac")
+    audio = _FakeAudio(_FakeTags({"title": ["Solo"], "tracknumber": ["1"]}))
+
+    with patch.object(tf, "MutagenFile", return_value=audio):
+        values = tf.read_track_field_by_position(album_dir, "title")
+
+    assert values == {("1", "1"): "Solo"}
+
+
+def test_read_track_field_by_position_uses_bare_artist_key_not_albumartist(tmp_path):
+    """Track-level artist locking must never be confused with the
+    album-wide 'artist' field (which also writes albumartist) — only the
+    plain ARTIST tag is read/written here."""
+    album_dir = _make_album(tmp_path, "01.flac")
+    audio = _FakeAudio(_FakeTags({
+        "artist": ["Track Artist"], "albumartist": ["Album Artist"], "tracknumber": ["1"],
+    }))
+
+    with patch.object(tf, "MutagenFile", return_value=audio):
+        values = tf.read_track_field_by_position(album_dir, "artist")
+
+    assert values == {("1", "1"): "Track Artist"}
+
+
+def test_write_track_field_by_position_writes_each_track_its_own_value(tmp_path):
+    album_dir = _make_album(tmp_path, "01.flac", "02.flac")
+    fakes = {
+        "01.flac": _FakeAudio(_FakeTags({"tracknumber": ["1"], "discnumber": ["1"]})),
+        "02.flac": _FakeAudio(_FakeTags({"tracknumber": ["2"], "discnumber": ["1"]})),
+    }
+
+    with patch.object(tf, "MutagenFile", side_effect=lambda path, easy=True: fakes[Path(path).name]):
+        touched = tf.write_track_field_by_position(
+            album_dir, "title", {("1", "1"): "One (restored)", ("1", "2"): "Two (restored)"},
+        )
+
+    assert touched == 2
+    assert fakes["01.flac"].tags["title"] == ["One (restored)"]
+    assert fakes["02.flac"].tags["title"] == ["Two (restored)"]
+
+
+def test_write_track_field_by_position_skips_a_track_with_no_snapshotted_value(tmp_path):
+    """A track added to the album since the snapshot was taken (or one
+    the snapshot just doesn't know about) is left untouched rather than
+    guessed at."""
+    album_dir = _make_album(tmp_path, "01.flac")
+    audio = _FakeAudio(_FakeTags({"tracknumber": ["1"], "discnumber": ["1"], "title": ["Untouched"]}))
+
+    with patch.object(tf, "MutagenFile", return_value=audio):
+        touched = tf.write_track_field_by_position(album_dir, "title", {("1", "2"): "Someone Else's Track"})
+
+    assert touched == 0
+    assert audio.tags["title"] == ["Untouched"]
+
+
+def test_write_track_field_by_position_matches_by_position_even_if_renamed(tmp_path):
+    """The whole point of keying by (disc, track) rather than file path:
+    beets may rename the file itself based on the newly-written title, but
+    the track's own position tag stays put, so restore still finds it."""
+    album_dir = _make_album(tmp_path, "01 - New Title.flac")
+    audio = _FakeAudio(_FakeTags({"tracknumber": ["1"], "discnumber": ["1"]}))
+
+    with patch.object(tf, "MutagenFile", return_value=audio):
+        touched = tf.write_track_field_by_position(album_dir, "title", {("1", "1"): "Old Title"})
+
+    assert touched == 1
+    assert audio.tags["title"] == ["Old Title"]

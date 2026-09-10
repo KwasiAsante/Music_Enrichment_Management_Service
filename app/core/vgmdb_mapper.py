@@ -403,6 +403,38 @@ class VGMDBMapper:
         log.info("excluded artist removed: %s", artist)
         return True
 
+    # ── included artists (Western-block override) ──────────────────────
+    def list_included_artists(self) -> list[str]:
+        """Artists force-enriched despite a Western MB country/area —
+        overrides :attr:`BeetsEnricher.SKIP_COUNTRIES`, case-insensitively
+        sorted."""
+        return sorted(store.included_artists.read(), key=str.lower)
+
+    def add_included_artist(self, artist: str) -> bool:
+        """Add an artist to the force-include list. Returns False (no-op)
+        if already present (case-insensitive)."""
+        artist = (artist or "").strip()
+        if not artist:
+            raise ValueError("artist name is required")
+        current = store.included_artists.read()
+        if any(a.lower() == artist.lower() for a in current):
+            return False
+        current.append(artist)
+        store.included_artists.write(current)
+        log.info("included artist added: %s", artist)
+        return True
+
+    def remove_included_artist(self, artist: str) -> bool:
+        """Remove an artist from the force-include list (case-insensitive).
+        Returns True if it was present and removed."""
+        current = store.included_artists.read()
+        new_list = [a for a in current if a.lower() != artist.strip().lower()]
+        if len(new_list) == len(current):
+            return False
+        store.included_artists.write(new_list)
+        log.info("included artist removed: %s", artist)
+        return True
+
     # ── export / import (Phase 3 backup-restore) ───────────────────────
     def export_mappings(self) -> dict[str, dict]:
         """Return the raw ``vgmdb_mapping.json`` contents, keyed by

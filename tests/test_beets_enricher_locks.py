@@ -31,6 +31,13 @@ def _make_enricher(
     tag_locks = MagicMock()
     tag_locks.snapshot.return_value = tag_locks_snapshot or {}
     tag_locks.restore.return_value = tag_locks_restore
+    # Per-track locks (title/artist) — defaulted to "nothing locked, nothing
+    # restored" so the arithmetic in enrich_album's success path
+    # (fields_locked += tag_locks.restore_tracks(...)) stays a plain int,
+    # not a MagicMock — see test_beets_enricher_track_locks.py for the
+    # dedicated coverage of this pair.
+    tag_locks.snapshot_tracks.return_value = {}
+    tag_locks.restore_tracks.return_value = 0
     enricher = BeetsEnricher(
         mb=MagicMock(),
         mapper=MagicMock(),

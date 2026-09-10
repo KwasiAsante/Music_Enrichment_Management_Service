@@ -54,6 +54,28 @@
   <div id="excluded-result" class="import-result"></div>
 </section>
 
+<section class="excluded-panel">
+  <div class="section-label">Included Western Artists (<span class="js-included-count">{{ included_artists | length }}</span>)</div>
+  <p class="panel-hint">Force-enriched during bulk enrichment even though MusicBrainz tags them with a Western country/area — for Western artists that do have a VGMDB presence.</p>
+  <div id="included-list" class="chip-row">
+    {% if included_artists %}
+      {% for name in included_artists %}
+      <span class="chip" data-artist="{{ name }}">
+        {{ name }}
+        <button class="chip-remove js-remove-included" type="button" title="Un-include" aria-label="Un-include {{ name }}">×</button>
+      </span>
+      {% endfor %}
+    {% else %}
+      <span class="chip-empty">No artists force-included.</span>
+    {% endif %}
+  </div>
+  <form id="included-form" class="excluded-form">
+    <input type="text" id="included-input" placeholder="Artist name to force-include...">
+    <button class="btn btn-ghost btn-sm" type="submit">+ Include</button>
+  </form>
+  <div id="included-result" class="import-result"></div>
+</section>
+
 <div class="filter-bar">
   <div class="cf" style="flex:1">
     <label>Artist</label>

@@ -30,7 +30,8 @@ def test_backup_contains_expected_files(client: TestClient, auth, isolated_env):
     names = set(zf.namelist())
     expected = {
         "vgmdb_mapping.json", "album_list.json", "enriched_albums.json",
-        "mb_artist_cache.json", "excluded_artists.json", "skipped_albums.json",
+        "mb_artist_cache.json", "excluded_artists.json", "included_artists.json",
+        "skipped_albums.json",
         "artists_mbids.json", "settings_override.json", "app.db", "manifest.json",
     }
     assert expected.issubset(names), f"missing: {expected - names}"

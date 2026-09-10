@@ -10,6 +10,15 @@ beets' own import and the field-override escape hatch.
 
 Storage mirrors ``field_overrides.json``'s shape/CRUD conventions:
 ``{folder: [field_name, ...]}``.
+
+``get_track_locks``/``set_track_lock``/``snapshot_tracks``/``restore_tracks``
+are a parallel, separately-stored pair of locks (``locked_track_fields.json``,
+same shape) for ``title`` and track-level ``artist`` — the two per-track
+identity fields the rest of this module refuses to touch (see
+``tag_fields.PER_TRACK_ONLY_KEYS``). Unlike the field locks above, these
+don't broadcast one value to every file: each track keeps its own value,
+matched before/after enrichment by ``(disc, track)`` position rather than
+file path, since beets may rename files based on the newly-written title.
 """
 
 from __future__ import annotations
@@ -77,6 +86,62 @@ class TagLockService:
                 log.warning("skipping restore of locked field %r on %s: %s", field, album_dir, exc)
         if snapshot:
             log.info("restored %d locked field write(s) in %s: %s",
+                      applied, album_dir, list(snapshot.keys()))
+        return applied
+
+    # ── per-track locks (title / track artist) ──────────────────────────
+    def get_track_locks(self, folder: str) -> list[str]:
+        return list(store.locked_track_fields.read().get(folder, []))
+
+    def set_track_lock(self, folder: str, field: str, locked: bool) -> list[str]:
+        """Lock or unlock ``title`` or ``artist`` album-wide, but unlike
+        :meth:`set_lock`, each track keeps its own value rather than all
+        tracks sharing one — see :meth:`snapshot_tracks`/:meth:`restore_tracks`."""
+        if locked and field not in tag_fields.TRACK_LOCKABLE_FIELDS:
+            raise ValueError(
+                f"{field!r} isn't a track-lockable field — only "
+                f"{tag_fields.TRACK_LOCKABLE_FIELDS} can be locked per-track",
+            )
+
+        all_locks = store.locked_track_fields.read()
+        fields = list(all_locks.get(folder, []))
+        if locked and field not in fields:
+            fields.append(field)
+        elif not locked and field in fields:
+            fields.remove(field)
+
+        if fields:
+            all_locks[folder] = fields
+        else:
+            all_locks.pop(folder, None)
+        store.locked_track_fields.write(all_locks)
+        log.info("track lock %s for %r on %s", "set" if locked else "cleared", field, folder)
+        return fields
+
+    def snapshot_tracks(
+        self, album_dir: Path, folder: str,
+    ) -> dict[str, dict[tuple[str, str], str | None]]:
+        """Current per-track value of every locked track field for
+        ``folder``, read before enrichment writes anything. Empty when
+        nothing is track-locked for this folder."""
+        fields = self.get_track_locks(folder)
+        return {
+            field: tag_fields.read_track_field_by_position(album_dir, field)
+            for field in fields
+        }
+
+    def restore_tracks(
+        self, album_dir: Path, snapshot: dict[str, dict[tuple[str, str], str | None]],
+    ) -> int:
+        """Re-write each locked track field back to its own track, matched
+        by ``(disc, track)`` position rather than file path or order —
+        see :func:`app.core.tag_fields.write_track_field_by_position`.
+        Returns the number of file writes applied."""
+        applied = 0
+        for field, values in snapshot.items():
+            applied += tag_fields.write_track_field_by_position(album_dir, field, values)
+        if snapshot:
+            log.info("restored %d per-track locked field write(s) in %s: %s",
                       applied, album_dir, list(snapshot.keys()))
         return applied
 

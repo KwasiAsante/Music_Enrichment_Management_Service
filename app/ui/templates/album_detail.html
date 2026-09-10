@@ -34,6 +34,22 @@
 <section id="tag-editor-section" style="display:none;">
   <div class="section-label">Edit Tags</div>
   <p class="page-sub">Changes save immediately to the audio files. 🔒 locks a field so future enrichment can never overwrite it — see the Enrich page for how re-enrich handles locked fields.</p>
+  <div class="settings-row" id="track-lock-row">
+    <div class="settings-row-label">
+      <label>Track-Level Locks</label>
+    </div>
+    <div class="settings-row-input">
+      <label class="toggle-check">
+        <input type="checkbox" id="lock-track-titles">
+        Lock Track Titles
+      </label>
+      <label class="toggle-check" style="margin-top:6px;">
+        <input type="checkbox" id="lock-track-artist">
+        Lock Track Artist
+      </label>
+      <p class="panel-hint" style="margin-top:6px;">Each track keeps its own title/artist — this only stops enrichment from changing them, it doesn't force every track to the same value.</p>
+    </div>
+  </div>
   <div id="tag-editor-warnings"></div>
   <div id="tag-editor-fields" class="settings-fields"></div>
   <div class="backup-row settings-row-input" style="margin-top:16px;">

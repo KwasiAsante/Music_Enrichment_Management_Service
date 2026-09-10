@@ -165,6 +165,7 @@ def mappings(request: Request) -> HTMLResponse:
     unmapped = mapper.list_unmapped(artist_filter=None, skip_western=True)
     skipped = mapper.list_skipped()
     excluded_artists = mapper.list_excluded_artists()
+    included_artists = mapper.list_included_artists()
     return templates.TemplateResponse(
         request,
         "mappings.html",
@@ -172,6 +173,7 @@ def mappings(request: Request) -> HTMLResponse:
             "unmapped": unmapped,
             "skipped": skipped,
             "excluded_artists": excluded_artists,
+            "included_artists": included_artists,
         },
     )
 

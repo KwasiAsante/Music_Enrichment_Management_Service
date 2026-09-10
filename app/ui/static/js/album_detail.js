@@ -18,6 +18,10 @@
  *     app/core/tag_editor.py and app/core/tag_locks.py. Unlike Field
  *     Overrides (which only takes effect on the next enrichment), a save
  *     here writes the files right away.
+ *   - Two extra checkboxes (#lock-track-titles/#lock-track-artist) toggle
+ *     the separate per-track lock pair via /api/v1/tags/track-locks —
+ *     each track keeps its own title/artist value, unlike the field-row
+ *     locks above which share one value across the whole album.
  */
 
 const REENRICH_POLL_MS = 1500;
@@ -199,6 +203,10 @@ async function openTagEditor(folder) {
 }
 
 function renderTagEditor(data) {
+  const trackLocks = data.track_locks || {};
+  document.getElementById('lock-track-titles').checked = !!trackLocks.title;
+  document.getElementById('lock-track-artist').checked = !!trackLocks.artist;
+
   document.getElementById('tag-editor-warnings').innerHTML = (data.warnings || [])
     .map((w) => `<div class="album-warning">⚠ ${escapeHtml(w)}</div>`)
     .join('');
@@ -319,6 +327,19 @@ async function saveTags() {
         body: JSON.stringify({ field, locked }),
       });
       if (!lockRes.ok) throw new Error(`could not update lock for "${field}" (HTTP ${lockRes.status})`);
+    }
+
+    const trackLocks = [
+      { field: 'title', locked: document.getElementById('lock-track-titles').checked },
+      { field: 'artist', locked: document.getElementById('lock-track-artist').checked },
+    ];
+    for (const { field, locked } of trackLocks) {
+      const lockRes = await fetch(`${window.APP_URL_BASE}/api/v1/tags/track-locks?folder=${encodeURIComponent(folder)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, locked }),
+      });
+      if (!lockRes.ok) throw new Error(`could not update track lock for "${field}" (HTTP ${lockRes.status})`);
     }
 
     resultEl.innerHTML = `<span class="badge badge-green">saved</span> <span>Reloading…</span>`;

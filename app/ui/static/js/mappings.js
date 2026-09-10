@@ -10,6 +10,8 @@
  *   #results-container  — unmapped albums (search / set / skip / bulk)
  *   #skipped-container   — albums marked vgmdb_id="skip" (restore)
  *   #excluded-list        — excluded-artist chips (remove)
+ *   #included-list        — force-included-artist chips (remove) — the
+ *                            Western-block override, mirrors #excluded-list
  *
  * One initUnmappedRow() call per unmapped `.result-card`. Search replaces
  * that row's action buttons with a result (badge + input + Set/Skip);
@@ -35,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#results-container .result-card[data-mb-id]').forEach(initUnmappedRow);
   document.querySelectorAll('#skipped-container .result-card[data-mb-id]').forEach(initSkippedRow);
   document.querySelectorAll('#excluded-list .js-remove-excluded').forEach(initExcludedChip);
+  document.querySelectorAll('#included-list .js-remove-included').forEach(initIncludedChip);
 
   document.getElementById('filter-artist')?.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
@@ -43,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('import-form')?.addEventListener('submit', handleImportSubmit);
   document.getElementById('excluded-form')?.addEventListener('submit', handleExcludeSubmit);
+  document.getElementById('included-form')?.addEventListener('submit', handleIncludeSubmit);
 
   document.getElementById('select-all-unmapped')?.addEventListener('change', (e) => {
     document.querySelectorAll('#results-container .js-row-select:not(:disabled)').forEach((cb) => {
@@ -247,6 +251,87 @@ async function removeExcludedArtist(chip) {
 function updateExcludedCount() {
   const remaining = document.querySelectorAll('#excluded-list .chip').length;
   document.querySelectorAll('.js-excluded-count').forEach((el) => (el.textContent = remaining));
+}
+
+// ── Included artists (Western-block override) ───────────────────────────
+function initIncludedChip(btn) {
+  btn.addEventListener('click', () => removeIncludedArtist(btn.closest('.chip')));
+}
+
+async function handleIncludeSubmit(e) {
+  e.preventDefault();
+  const input = document.getElementById('included-input');
+  const resultEl = document.getElementById('included-result');
+  const artist = input.value.trim();
+  if (!artist) return;
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  resultEl.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/v1/mapping/included-artists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artist }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `add failed (HTTP ${res.status})`);
+
+    if (data.changed) {
+      addIncludedChip(data.artist);
+      input.value = '';
+    } else {
+      resultEl.innerHTML = `<span class="badge badge-yellow">already included</span>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function addIncludedChip(artist) {
+  const list = document.getElementById('included-list');
+  list.querySelector('.chip-empty')?.remove();
+
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.dataset.artist = artist;
+  chip.innerHTML =
+    `${escapeHtml(artist)} ` +
+    `<button class="chip-remove js-remove-included" type="button" title="Un-include" aria-label="Un-include ${escapeHtml(artist)}">×</button>`;
+  list.appendChild(chip);
+  initIncludedChip(chip.querySelector('.js-remove-included'));
+  updateIncludedCount();
+}
+
+async function removeIncludedArtist(chip) {
+  const artist = chip.dataset.artist;
+  const btn = chip.querySelector('.js-remove-included');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/v1/mapping/included-artists/${encodeURIComponent(artist)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`remove failed (HTTP ${res.status})`);
+    chip.remove();
+    updateIncludedCount();
+    const list = document.getElementById('included-list');
+    if (!list.querySelector('.chip')) {
+      list.innerHTML = `<span class="chip-empty">No artists force-included.</span>`;
+    }
+  } catch (err) {
+    btn.disabled = false;
+    document.getElementById('included-result').innerHTML =
+      `<span class="badge badge-red">error</span> <span>${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function updateIncludedCount() {
+  const remaining = document.querySelectorAll('#included-list .chip').length;
+  document.querySelectorAll('.js-included-count').forEach((el) => (el.textContent = remaining));
 }
 
 // ── Skipped albums ────────────────────────────────────────────────────────

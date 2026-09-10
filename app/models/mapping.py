@@ -150,6 +150,21 @@ class ExcludedArtistResult(BaseModel):
     )
 
 
+# ── included-artists CRUD (Western-block override) ──────────────────────────
+class IncludedArtistRequest(BaseModel):
+    """Body for ``POST /mapping/included-artists``."""
+    artist: str = Field(description="Exact artist name to force-include.")
+
+
+class IncludedArtistResult(BaseModel):
+    """Response from ``POST``/``DELETE /mapping/included-artists``."""
+    artist:  str
+    changed: bool = Field(
+        description="True if the list actually changed — false for adding "
+        "a duplicate or removing an artist that wasn't present.",
+    )
+
+
 # ── POST /mapping/import ───────────────────────────────────────────────────
 class ImportMappingsResult(BaseModel):
     """Response from ``POST /mapping/import``."""

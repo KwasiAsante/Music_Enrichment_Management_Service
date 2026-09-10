@@ -58,6 +58,7 @@ _JSON_STATE_FILES = [
     ("enriched_albums.json", "enriched_albums"),
     ("mb_artist_cache.json", "mb_artist_cache"),
     ("excluded_artists.json", "excluded_artists"),
+    ("included_artists.json", "included_artists"),
     ("skipped_albums.json", "skipped_albums"),
     ("artists_mbids.json", "artists_mbids"),
 ]

@@ -133,9 +133,11 @@ def isolated_env(
         ("mb_artist_cache", "mb_artist_cache.json"),
         ("skipped_albums", "skipped_albums.json"),
         ("excluded_artists", "excluded_artists.json"),
+        ("included_artists", "included_artists.json"),
         ("artists_mbids", "artists_mbids.json"),
         ("field_overrides", "field_overrides.json"),
         ("locked_fields", "locked_fields.json"),
+        ("locked_track_fields", "locked_track_fields.json"),
     ]:
         json_file = getattr(store, attr, None)
         if json_file is not None:
